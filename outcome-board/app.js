@@ -94,6 +94,10 @@ async function load() {
       p.kids.forEach((id) => next[CHILD[k]].get(id).parents.push(p.id));
     }
   }
+  const pos = (x) => x.row.manualSort ?? x.id;
+  next.O = new Map(
+    [...next.O.values()].sort((a, b) => pos(a) - pos(b)).map((o) => [o.id, o]),
+  );
   S = next;
 }
 
@@ -274,7 +278,7 @@ function laneHTML(o) {
   }
   const imp = o && num(o.row[CFG.O.impact]);
   return `<section class="lane${o ? "" : " unlinked"}">
-    <div class="lane-head" tabindex="0" data-type="O" data-id="${id}">${o ? esc(o.name) : "Not linked to an outcome"}
+    <div class="lane-head" tabindex="0" data-type="O" data-id="${id}" data-parent="0"${o ? ' draggable="true" title="Drag to reorder"' : ""}>${o ? esc(o.name) : "Not linked to an outcome"}
       <span class="sub">${o ? `${o.kids.length} capabilit${o.kids.length === 1 ? "y" : "ies"}${imp !== null && imp !== undefined ? ` · impact ${imp}` : ""}${o.row[CFG.O.review] ? " · needs review" : ""}` : "Drag notes here to unlink them"}</span></div>
     <div class="lane-body" data-drop="C" data-parent="${id}">${caps.map((c) => capHTML(c, id)).join("")}
       <button class="add" data-add="C" data-parent="${id}">+ Add capability</button></div></section>`;
@@ -532,7 +536,32 @@ document.addEventListener("dragstart", (e) => {
   requestAnimationFrame(() => n.classList.add("dragging"));
 });
 
+// Outcome lists reorder left/right; order is saved in the Outcomes table's row order (manualSort).
+function laneSlot(e) {
+  const lanes = [...document.querySelectorAll("#board .lane")].filter(
+    (l) => +$(".lane-head", l).dataset.id,
+  );
+  const others = lanes.filter(
+    (l) => +$(".lane-head", l).dataset.id !== ui.drag.id,
+  );
+  const before = others.find((l) => {
+    const r = l.getBoundingClientRect();
+    return e.clientX < r.left + r.width / 2;
+  });
+  return { before, order: others.map((l) => +$(".lane-head", l).dataset.id) };
+}
+
 document.addEventListener("dragover", (e) => {
+  if (ui.drag?.type === "O") {
+    if (!e.target.closest("#board")) return;
+    e.preventDefault();
+    clearDrop();
+    const { before } = laneSlot(e);
+    marker = document.createElement("div");
+    marker.className = "lane-marker";
+    $("#board").insertBefore(marker, before || $("#board .add-lane"));
+    return;
+  }
   const t = dropTarget(e);
   clearDrop();
   if (!t) return;
@@ -558,6 +587,26 @@ document.addEventListener("dragover", (e) => {
 });
 
 document.addEventListener("drop", (e) => {
+  if (ui.drag?.type === "O") {
+    e.preventDefault();
+    const { before, order } = laneSlot(e),
+      id = ui.drag.id;
+    const at = before
+      ? order.indexOf(+$(".lane-head", before).dataset.id)
+      : order.length;
+    order.splice(at, 0, id);
+    clearDrop();
+    ui.drag = null;
+    act([
+      [
+        "BulkUpdateRecord",
+        CFG.O.table,
+        order,
+        { manualSort: order.map((_, i) => i + 1) },
+      ],
+    ]);
+    return;
+  }
   const t = dropTarget(e),
     d = ui.drag;
   if (!t || !d) return;

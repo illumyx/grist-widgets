@@ -84,7 +84,13 @@
       },
       async applyUserActions(actions) {
         for (const [op, t, id, f] of actions) {
-          if (op === "UpdateRecord")
+          if (op === "BulkUpdateRecord")
+            id.forEach((rid, i) =>
+              Object.entries(f).forEach(
+                ([k, v]) => (db[t].find((r) => r.id === rid)[k] = v[i]),
+              ),
+            );
+          else if (op === "UpdateRecord")
             Object.entries(f).forEach(
               ([k, v]) => (db[t].find((r) => r.id === id)[k] = dec(v)),
             );

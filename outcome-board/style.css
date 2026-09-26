@@ -270,6 +270,16 @@ input {
 .dragging {
   opacity: 0.4;
 }
+.lane-marker {
+  flex: 0 0 4px;
+  align-self: stretch;
+  background: var(--select);
+  border-radius: 2px;
+  margin: 0 -8px;
+}
+.lane-head[draggable="true"] {
+  cursor: grab;
+}
 .drop-marker {
   height: 3px;
   background: var(--select);
@@ -283,6 +293,9 @@ input {
   display: none !important;
 }
 
+.pane[hidden] {
+  display: none;
+}
 body.pane-open .board {
   margin-right: 360px;
 }
@@ -319,9 +332,6 @@ body.pane-open .board {
   color: var(--muted);
   white-space: pre-wrap;
   margin-top: 6px;
-}
-.pane[hidden] {
-  display: none;
 }
 .chips {
   display: flex;
