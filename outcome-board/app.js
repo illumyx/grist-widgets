@@ -1,0 +1,350 @@
+/* Link board: Outcomes (lists) -> Capabilities (sticky notes) -> Deliverables (small notes) -> Tasks (checklist).
+ * Links are many-to-many. Each link is written on the PARENT side (parent's RefList order = display order);
+ * Grist's two-way references keep the child side in sync. */
+"use strict";
+
+// ---- Column names: adjust here if you rename things in Grist -------------------------------------
+const CFG = {
+  O: { table: "Outcomes", name: "Outcome", children: "Capabilities", review: "Needs_Review", impact: "Impact" },
+  C: { table: "Capabilities", name: "Capability", children: "Deliverables", parents: "Outcomes",
+       review: "Needs_Review", impact: "Overall_Impact", effort: "Overall_Effort", proposed: "Proposed_By" },
+  D: { table: "Deliverables", name: "Deliverable", children: "Tasks", parents: "Capabilities",
+       review: "Needs_Review", note: "Review_Note", status: "Status", impact: "Impact" },
+  T: { table: "Tasks", name: "Task", parents: "Deliverables", status: "Status", effort: "Effort" },
+};
+const CHILD = { O: "C", C: "D", D: "T" };
+const PARENT = { C: "O", D: "C", T: "D" };
+const LABEL = { O: "outcome", C: "capability", D: "deliverable", T: "task" };
+const DONE = "Done", NOT_STARTED = "Not Started";
+
+const api = window.GRIST_MOCK || grist;
+const $ = (s, el = document) => el.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const refs = v => Array.isArray(v) ? (v[0] === "L" ? v.slice(1) : v) : [];
+
+let S = { O: new Map(), C: new Map(), D: new Map(), T: new Map() };
+const ui = { expanded: new Set(), sel: null, clip: null, pane: null, drag: null, busy: false };
+
+// ---- Data ------------------------------------------------------------------------------------------
+async function load() {
+  const tabs = await Promise.all(["O", "C", "D", "T"].map(k => api.docApi.fetchTable(CFG[k].table)));
+  const next = {};
+  ["O", "C", "D", "T"].forEach((k, i) => {
+    const t = tabs[i], m = new Map();
+    t.id.forEach((id, r) => {
+      const row = { id };
+      for (const col in t) if (col !== "id") row[col] = t[col][r];
+      m.set(id, { id, row, name: row[CFG[k].name] || "(untitled)", kids: CHILD[k] ? refs(row[CFG[k].children]) : [], parents: [] });
+    });
+    next[k] = m;
+  });
+  for (const k of ["O", "C", "D"]) {  // derive parents from parent-side lists, drop dangling refs
+    for (const p of next[k].values()) {
+      p.kids = p.kids.filter(id => next[CHILD[k]].has(id));
+      p.kids.forEach(id => next[CHILD[k]].get(id).parents.push(p.id));
+    }
+  }
+  S = next;
+}
+
+async function refresh(force) {  // polling skips while you're dragging or typing; our own writes force it
+  if (!force && (ui.drag || ui.busy || document.activeElement?.matches("input[type=text]"))) return;
+  try { await load(); render(); $("#status").textContent = ""; }
+  catch (e) { $("#status").textContent = "Couldn't read the tables: " + (e.message || e); }
+}
+
+async function act(actions, msg) {
+  ui.busy = true;
+  try { await api.docApi.applyUserActions(actions); if (msg) toast(msg); }
+  catch (e) { toast("Change failed: " + (e.message || e)); }
+  finally { ui.busy = false; }
+  await refresh(true);
+}
+
+const kidsOf = (type, parent) =>  // children of a parent; parent 0 = the "not linked" bucket
+  parent ? [...S[PARENT[type]].get(parent).kids] : [...S[type].values()].filter(x => !x.parents.length).map(x => x.id);
+const setKids = (type, parent, list) =>
+  ["UpdateRecord", CFG[PARENT[type]].table, parent, { [CFG[PARENT[type]].children]: ["L", ...list] }];
+const nameOf = (type, id) => id ? S[type].get(id)?.name : "Not linked";
+
+function move(type, id, from, to, index) {
+  const acts = [];
+  if (from === to) {
+    if (!to) return;
+    const list = kidsOf(type, to), old = list.indexOf(id);
+    list.splice(old, 1);
+    list.splice(index > old ? index - 1 : index, 0, id);
+    acts.push(setKids(type, to, list));
+  } else {
+    if (from) acts.push(setKids(type, from, kidsOf(type, from).filter(x => x !== id)));
+    if (to) {
+      const list = kidsOf(type, to);
+      if (!list.includes(id)) { list.splice(Math.min(index, list.length), 0, id); acts.push(setKids(type, to, list)); }
+    }
+  }
+  if (acts.length) act(acts, `Moved “${nameOf(type, id)}” to “${nameOf(PARENT[type], to)}”.`);
+}
+
+function link(type, id, to) {
+  const list = kidsOf(type, to);
+  if (list.includes(id)) return toast(`“${nameOf(type, id)}” is already on “${nameOf(PARENT[type], to)}”.`);
+  act([setKids(type, to, [...list, id])], `Linked “${nameOf(type, id)}” to “${nameOf(PARENT[type], to)}”.`);
+}
+
+function unlink(type, id, from) {
+  if (!from) return;
+  act([setKids(type, from, kidsOf(type, from).filter(x => x !== id))],
+      `Removed “${nameOf(type, id)}” from “${nameOf(PARENT[type], from)}”.`);
+}
+
+function addRecord(type, parent) {
+  const name = prompt(`New ${LABEL[type]}:`);
+  if (!name?.trim()) return;
+  const fields = { [CFG[type].name]: name.trim() };
+  if (parent) fields[CFG[type].parents] = ["L", parent];
+  act([["AddRecord", CFG[type].table, null, fields]], `Added “${name.trim()}”.`);
+}
+
+// ---- Rendering -------------------------------------------------------------------------------------
+const q = () => $("#search").value.trim().toLowerCase();
+const hideDone = () => $("#hideDone").checked;
+const matches = x => !q() || x.name.toLowerCase().includes(q());
+const doneOf = x => (x.row[CFG.D.status] || x.row[CFG.T.status]) === DONE;
+const copies = (x, level) => x.parents.length > 1 ? `<span class="copies" title="On ${x.parents.length} ${LABEL[PARENT[level]]}s">×${x.parents.length}</span>` : "";
+const reviewDot = (x, level) => x.row[CFG[level].review] ? `<span class="review" title="Needs review"></span>` : "";
+const num = v => (v === null || v === undefined || v === "" || typeof v === "object") ? null : v;
+
+function delHTML(d, cap) {
+  const tasks = d.kids.map(t => S.T.get(t)), done = tasks.filter(doneOf).length;
+  const st = d.row[CFG.D.status] || "";
+  return `<div class="del${ui.pane === d.id ? " open" : ""}" draggable="true" tabindex="0" data-type="D" data-id="${d.id}" data-parent="${cap}" data-status="${esc(st)}">
+    ${esc(d.name)}${copies(d, "D")}
+    <div class="meta">${reviewDot(d, "D")}${tasks.length ? `<span>${done}/${tasks.length} tasks</span>` : ""}${st ? `<span>${esc(st)}</span>` : ""}</div>
+    ${cap ? `<button class="x" data-unlink title="Remove from this capability" aria-label="Remove from this capability">×</button>` : ""}</div>`;
+}
+
+function capHTML(c, out) {
+  const special = c.id === 0;
+  const dels = c.kids.map(d => S.D.get(d)).filter(d => !(hideDone() && doneOf(d)));
+  const shown = dels.filter(matches);
+  if (q() && !matches(c) && !shown.length) return "";
+  const open = ui.expanded.has(c.id) || (q() && shown.length && !matches(c));
+  const list = (q() && !matches(c)) ? shown : dels;
+  const imp = num(c.row?.[CFG.C.impact]), eff = num(c.row?.[CFG.C.effort]);
+  return `<div class="cap${special ? " special" : ""}" ${special ? "" : 'draggable="true"'} tabindex="0" data-type="C" data-id="${c.id}" data-parent="${out}">
+    <div class="cap-title"><button class="chev" data-toggle aria-expanded="${open}" aria-label="${open ? "Collapse" : "Expand"}">${open ? "▾" : "▸"}</button>${esc(c.name)}</div>
+    ${special ? "" : copies(c, "C")}
+    <div class="meta">${special ? "" : reviewDot(c, "C")}<span>${dels.length} deliverable${dels.length === 1 ? "" : "s"}</span>
+      ${imp !== null ? `<span>Impact ${imp}</span>` : ""}${eff !== null ? `<span>Effort ${eff}</span>` : ""}
+      ${c.row?.[CFG.C.proposed] ? `<span class="pill">${esc(c.row[CFG.C.proposed])}</span>` : ""}</div>
+    ${open ? `<div class="dels" data-drop="D" data-parent="${special ? 0 : c.id}">${list.map(d => delHTML(d, special ? 0 : c.id)).join("")}
+      ${special ? "" : `<button class="add" data-add="D" data-parent="${c.id}">+ Add deliverable</button>`}</div>` : ""}
+    ${out && !special ? `<button class="x" data-unlink title="Remove from this outcome" aria-label="Remove from this outcome">×</button>` : ""}</div>`;
+}
+
+function laneHTML(o) {
+  const id = o ? o.id : 0;
+  let caps = kidsOf("C", id).map(c => S.C.get(c));
+  if (!o) {  // "Not linked" lane: unlinked capabilities + bucket for unlinked deliverables
+    const orphanD = kidsOf("D", 0);
+    caps.push({ id: 0, name: "Deliverables without a capability", kids: orphanD, parents: [], row: {} });
+  }
+  const imp = o && num(o.row[CFG.O.impact]);
+  return `<section class="lane${o ? "" : " unlinked"}">
+    <div class="lane-head" tabindex="0" data-type="O" data-id="${id}">${o ? esc(o.name) : "Not linked to an outcome"}
+      <span class="sub">${o ? `${o.kids.length} capabilit${o.kids.length === 1 ? "y" : "ies"}${imp !== null && imp !== undefined ? ` · impact ${imp}` : ""}${o.row[CFG.O.review] ? " · needs review" : ""}` : "Drag notes here to unlink them"}</span></div>
+    <div class="lane-body" data-drop="C" data-parent="${id}">${caps.map(c => capHTML(c, id)).join("")}
+      <button class="add" data-add="C" data-parent="${id}">+ Add capability</button></div></section>`;
+}
+
+function render() {
+  const board = $("#board"), scroll = [...board.querySelectorAll(".lane-body")].map(e => e.scrollTop), left = board.scrollLeft;
+  board.innerHTML = laneHTML(null) + [...S.O.values()].map(laneHTML).join("") +
+    `<button class="add-lane" data-add="O">+ Add outcome</button>`;
+  board.querySelectorAll(".lane-body").forEach((e, i) => e.scrollTop = scroll[i] || 0);
+  board.scrollLeft = left;
+  if (ui.sel) {
+    const el = findEl(ui.sel);
+    if (el) el.classList.add("selected"); else ui.sel = null;
+  }
+  renderPane();
+}
+
+function renderPane() {
+  const pane = $("#pane");
+  const closed = ui.pane === null || (ui.pane && !S.D.has(ui.pane));
+  document.body.classList.toggle("pane-open", !closed);
+  if (closed) { pane.hidden = true; ui.pane = null; return; }
+  const d = ui.pane ? S.D.get(ui.pane) : { id: 0, name: "Tasks without a deliverable", kids: kidsOf("T", 0), parents: [], row: {} };
+  const tasks = d.kids.map(t => S.T.get(t)).filter(t => !(hideDone() && doneOf(t)) && matchesTask(t));
+  const note = d.row[CFG.D.note];
+  pane.hidden = false;
+  pane.innerHTML = `<div class="pane-head"><h2>${esc(d.name)}</h2>
+      <button class="x" data-close aria-label="Close">×</button>
+      ${d.parents.length ? `<div class="chips">${d.parents.map(c => `<span class="chip">${esc(nameOf("C", c))}</span>`).join("")}</div>` : ""}
+      ${note ? `<div class="pane-note">${esc(note)}</div>` : ""}</div>
+    <div class="tasks" data-drop="T" data-parent="${d.id}">
+      ${tasks.map(t => `<div class="task${doneOf(t) ? " done" : ""}" draggable="true" tabindex="0" data-type="T" data-id="${t.id}" data-parent="${d.id}">
+        <input type="checkbox" data-check ${doneOf(t) ? "checked" : ""} aria-label="Done">
+        <span class="name">${esc(t.name)}${num(t.row[CFG.T.effort]) ? ` <span class="pill">${t.row[CFG.T.effort]}</span>` : ""}</span>
+        ${copies(t, "T")}${d.id ? `<button class="x" data-unlink title="Remove from this deliverable" aria-label="Remove from this deliverable">×</button>` : ""}</div>`).join("")
+        || `<div class="empty">No tasks yet.</div>`}</div>
+    ${d.id ? `<form data-addtask><input type="text" placeholder="Add a task and press Enter" aria-label="New task"></form>` : ""}`;
+}
+const matchesTask = () => true;  // the filter box applies to the board, not the checklist
+
+function findEl(sel) {
+  const sc = sel.type === "T" ? $("#pane") : $("#board");
+  return sc.querySelector(`[data-type="${sel.type}"][data-id="${sel.id}"][data-parent="${sel.parent}"]`) ||
+         (sel.type === "O" ? $(`#board .lane-head[data-id="${sel.id}"]`) : null);
+}
+const noteOf = el => el?.closest("[data-type]");
+const selOf = el => ({ type: el.dataset.type, id: +el.dataset.id, parent: +(el.dataset.parent || 0) });
+
+// ---- Interaction -----------------------------------------------------------------------------------
+function select(el) {
+  document.querySelectorAll(".selected").forEach(e => e.classList.remove("selected"));
+  ui.sel = el ? selOf(el) : null;
+  el?.classList.add("selected");
+}
+
+function toast(msg) {
+  const t = $("#toast");
+  t.textContent = msg; t.classList.add("show");
+  clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove("show"), 3200);
+}
+
+document.addEventListener("click", e => {
+  const t = e.target, note = noteOf(t);
+  if (t.closest("[data-close]")) { ui.pane = null; renderPane(); render(); return; }
+  if (t.closest("[data-add]")) { const b = t.closest("[data-add]"); return addRecord(b.dataset.add, +b.dataset.parent || 0); }
+  if (t.closest("[data-toggle]")) {
+    const id = +note.dataset.id; ui.expanded.has(id) ? ui.expanded.delete(id) : ui.expanded.add(id);
+    select(note); render(); return;
+  }
+  if (t.closest("[data-unlink]")) { const s = selOf(note); return unlink(s.type, s.id, s.parent); }
+  if (t.matches("[data-check]")) {
+    const id = +note.dataset.id, done = t.checked;
+    return act([["UpdateRecord", CFG.T.table, id, { [CFG.T.status]: done ? DONE : NOT_STARTED }]]);
+  }
+  if (note) {
+    select(note);
+    if (note.dataset.type === "D") { ui.pane = +note.dataset.id; render(); }
+    if (note.dataset.type === "C" && +note.dataset.id === 0) { ui.expanded.add(0); render(); }
+  } else if (t.closest("#board")) select(null);
+});
+
+document.addEventListener("submit", e => {
+  if (!e.target.matches("[data-addtask]")) return;
+  e.preventDefault();
+  const input = $("input", e.target), name = input.value.trim();
+  if (!name || !ui.pane) return;
+  input.value = "";
+  act([["AddRecord", CFG.T.table, null, { [CFG.T.name]: name, [CFG.T.parents]: ["L", ui.pane] }]])
+    .then(() => $("#pane form input")?.focus());
+});
+
+// Hovering a note outlines its other copies.
+document.addEventListener("mouseover", e => {
+  const n = noteOf(e.target);
+  document.querySelectorAll(".twin").forEach(x => x.classList.remove("twin"));
+  if (!n || n.dataset.type === "O" || !+n.dataset.id) return;
+  document.querySelectorAll(`[data-type="${n.dataset.type}"][data-id="${n.dataset.id}"]`)
+    .forEach(x => { if (x !== n) x.classList.add("twin"); });
+});
+
+document.addEventListener("keydown", e => {
+  if (e.target.matches("input")) return;
+  const mod = e.ctrlKey || e.metaKey, s = ui.sel;
+  if (mod && e.key === "c" && s && s.type !== "O" && s.id) {
+    ui.clip = { type: s.type, id: s.id };
+    const where = { C: "an outcome list", D: "a capability", T: "a deliverable" }[s.type];
+    toast(`Copied “${nameOf(s.type, s.id)}”. Select ${where} and press ${e.metaKey ? "⌘" : "Ctrl+"}V.`);
+    e.preventDefault();
+  } else if (mod && e.key === "v" && ui.clip) {
+    const c = ui.clip, want = PARENT[c.type];
+    let target = null;
+    if (c.type === "T" && ui.pane) target = ui.pane;
+    else if (s?.type === want) target = s.id;
+    else if (s?.type === c.type) target = s.parent;
+    if (!target) return toast(`Select ${{ O: "an outcome list", C: "a capability", D: "a deliverable" }[want]} to paste into.`);
+    link(c.type, c.id, target);
+    e.preventDefault();
+  } else if ((e.key === "Delete" || e.key === "Backspace") && s && s.type !== "O" && s.parent) {
+    unlink(s.type, s.id, s.parent); e.preventDefault();
+  } else if (e.key === "Escape") {
+    select(null); ui.pane = null; render();
+  } else if (e.key === "Enter" && e.target.matches("[data-type]")) {
+    e.target.click();
+  }
+});
+
+// ---- Drag and drop (move) --------------------------------------------------------------------------
+let marker = null;
+function clearDrop() {
+  marker?.remove(); marker = null;
+  document.querySelectorAll(".drop-into").forEach(x => x.classList.remove("drop-into"));
+}
+
+function dropTarget(e) {
+  const d = ui.drag; if (!d) return null;
+  const zone = e.target.closest(`[data-drop="${d.type}"]`);
+  if (zone) return { zone, parent: +zone.dataset.parent };
+  // Collapsed capability card accepts deliverables; deliverable note accepts tasks (appends).
+  const n = noteOf(e.target);
+  if (n && n.dataset.type === PARENT[d.type] && +n.dataset.id) return { into: n, parent: +n.dataset.id };
+  return null;
+}
+
+document.addEventListener("dragstart", e => {
+  const n = noteOf(e.target);
+  if (!n || !n.draggable) return;
+  ui.drag = selOf(n);
+  e.dataTransfer.effectAllowed = "move";
+  e.dataTransfer.setData("text/plain", n.dataset.id);
+  requestAnimationFrame(() => n.classList.add("dragging"));
+});
+
+document.addEventListener("dragover", e => {
+  const t = dropTarget(e);
+  clearDrop();
+  if (!t) return;
+  e.preventDefault();
+  if (t.into) { t.into.classList.add("drop-into"); t.index = Infinity; return; }
+  const items = [...t.zone.children].filter(x => x.dataset.type === ui.drag.type && !x.classList.contains("dragging"));
+  const before = items.find(x => { const r = x.getBoundingClientRect(); return e.clientY < r.top + r.height / 2; });
+  marker = document.createElement("div"); marker.className = "drop-marker";
+  t.zone.insertBefore(marker, before || t.zone.querySelector(":scope > .add") || null);
+});
+
+document.addEventListener("drop", e => {
+  const t = dropTarget(e), d = ui.drag;
+  if (!t || !d) return;
+  e.preventDefault();
+  let index = Infinity;
+  if (t.zone && marker) {  // index among the parent's full child list, not just the visible ones
+    const next = marker.nextElementSibling;
+    const full = t.parent ? kidsOf(d.type, t.parent) : [];
+    index = next?.dataset?.type === d.type ? full.indexOf(+next.dataset.id) : full.length;
+    if (index < 0) index = full.length;
+  }
+  clearDrop();
+  ui.drag = null;
+  move(d.type, d.id, d.parent, t.parent, index);
+});
+
+document.addEventListener("dragend", () => {
+  clearDrop(); ui.drag = null;
+  document.querySelectorAll(".dragging").forEach(x => x.classList.remove("dragging"));
+});
+
+// ---- Toolbar & startup -----------------------------------------------------------------------------
+$("#search").addEventListener("input", render);
+$("#hideDone").addEventListener("change", render);
+$("#expandAll").addEventListener("click", () => { S.C.forEach((_, id) => ui.expanded.add(id)); ui.expanded.add(0); render(); });
+$("#collapseAll").addEventListener("click", () => { ui.expanded.clear(); render(); });
+
+api.ready({ requiredAccess: "full" });
+api.onRecords?.(() => refresh());      // fires when the table this widget is bound to changes
+setInterval(() => { if (!document.hidden) refresh(); }, 5000);  // catch edits to the other three tables
+refresh();

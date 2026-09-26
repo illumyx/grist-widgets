@@ -1,0 +1,22 @@
+# For security reasons:
+passwords*
+credentials*
+decrypted_*
+pt_*
+.env
+
+# Symlinks:
+illumyx_lib
+
+# Cruft:
+__pycache__
+*.pyc
+.ipynb_checkpoints
+.pytest_cache
+
+# Max's pet items:
+z_*
+COMMIT
+
+# Dan's pet items:
+.venv
