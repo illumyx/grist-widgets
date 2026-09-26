@@ -13,9 +13,12 @@ and clicking a deliverable opens its task checklist. Every link is many-to-many.
 Column names are in `CFG` at the top of `app.js`.
 
 ## Try it locally
+
     cd widgets/linkboard && python -m http.server 8000
+
 Open http://localhost:8000 for a demo with sample data (changes stay in the browser).
 To run it against the real doc, use http://localhost:8000/index.html as the widget URL below.
 
 ## Add it in Grist
+
 Add widget to page → Custom → enter the widget URL → select data: Outcomes → access: Full document.
