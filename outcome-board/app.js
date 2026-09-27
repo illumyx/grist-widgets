@@ -124,7 +124,9 @@ async function refresh(force) {
     !force &&
     (ui.drag ||
       ui.busy ||
-      document.activeElement?.matches("input:not([type=checkbox]), select"))
+      document.activeElement?.matches(
+        "input:not([type=checkbox]), select, textarea",
+      ))
   )
     return;
   try {
@@ -250,8 +252,14 @@ function measure(x, m) {
   const v = num(x.row?.[m]);
   if (v === null) return "";
   const est = m + "_Rollup" in x.row && num(x.row[m + "_Rollup"]) === null;
-  return `<span title="${est ? "Estimate" : "From linked items"}">${m} ${est ? "~" : ""}${fmt(v)}</span>`;
+  return `<span title="${est ? "Estimate" : "From linked items"}">${m} ${est ? "≈" : ""}${fmt(v)}</span>`;
 }
+const metrics = (x) => {
+  const m = [measure(x, "Impact"), measure(x, "Effort")].filter(Boolean);
+  return m.length
+    ? `<div class="metrics">${m.join('<span class="dot">·</span>')}</div>`
+    : "";
+};
 const urgRank = (u) => URGENCY.indexOf(u || "");
 const urgAttr = (u) => (u ? ` data-urgency="${esc(u)}"` : "");
 const paneIs = (type, id) => ui.pane?.type === type && ui.pane.id === id;
@@ -262,7 +270,7 @@ function delHTML(d, cap) {
   const st = d.row[CFG.D.status] || "";
   return `<div class="del${paneIs("D", d.id) ? " open" : ""}" draggable="true" tabindex="0" data-type="D" data-id="${d.id}" data-parent="${cap}" data-status="${esc(st)}"${urgAttr(d.row[CFG.D.urgency])}>
     ${esc(d.name)}${copies(d, "D")}
-    <div class="meta">${reviewDot(d, "D")}${tasks.length ? `<span>${done}/${tasks.length} tasks</span>` : ""}${st ? `<span>${esc(st)}</span>` : ""}${measure(d, "Impact")}${measure(d, "Effort")}</div>
+    <div class="meta">${reviewDot(d, "D")}${tasks.length ? `<span>${done}/${tasks.length} tasks</span>` : ""}${st ? `<span>${esc(st)}</span>` : ""}</div>${metrics(d)}
     ${cap ? `<button class="x" data-unlink title="Remove from this capability" aria-label="Remove from this capability">×</button>` : ""}</div>`;
 }
 
@@ -284,8 +292,9 @@ function capHTML(c, out) {
     <div class="cap-title"><button class="chev" data-toggle aria-expanded="${open}" aria-label="${open ? "Collapse" : "Expand"}">${open ? "▾" : "▸"}</button>${esc(c.name)}</div>
     ${special ? "" : copies(c, "C")}
     <div class="meta">${special ? "" : reviewDot(c, "C")}<span>${dels.length} deliverable${dels.length === 1 ? "" : "s"}</span>
-      ${special ? "" : measure(c, "Impact") + measure(c, "Effort")}
+
       ${c.row?.[CFG.C.proposed] ? `<span class="pill">${esc(c.row[CFG.C.proposed])}</span>` : ""}</div>
+    ${special ? "" : metrics(c)}
     ${
       open
         ? `<div class="dels" data-drop="D" data-parent="${special ? 0 : c.id}">${list.map((d) => delHTML(d, special ? 0 : c.id)).join("")}
@@ -384,7 +393,7 @@ function renderPane() {
   const sum = [measure(x, "Impact"), measure(x, "Effort")]
     .filter(Boolean)
     .join(" · ");
-  let html = `<div class="pane-head"><div class="kind">${LABEL[L]}</div><h2>${esc(x.name)}</h2>
+  let html = `<div class="pane-head"><div class="kind">${LABEL[L]}</div>${x.id ? `<textarea class="title" data-field="${CFG[L].name}" rows="1" aria-label="Name">${esc(x.row[CFG[L].name] ?? "")}</textarea>` : `<h2>${esc(x.name)}</h2>`}
       <button class="x" data-close aria-label="Close">×</button>
       ${x.parents.length ? `<div class="chips">${x.parents.map((q) => `<span class="chip">${esc(nameOf(PARENT[L], q))}</span>`).join("")}</div>` : ""}
       ${L !== "O" && sum ? `<div class="summary">${sum}</div>` : ""}
@@ -411,6 +420,11 @@ function renderPane() {
       ${x.id ? `<form data-addtask><input type="text" placeholder="Add a task and press Enter" aria-label="New task"></form>` : ""}`;
   }
   pane.innerHTML = html;
+  const title = $("textarea.title", pane);
+  if (title) {
+    title.style.height = "auto";
+    title.style.height = title.scrollHeight + "px";
+  }
 }
 
 function findEl(sel) {
@@ -514,6 +528,7 @@ document.addEventListener("change", (e) => {
         ? null
         : +el.value
       : el.value || null;
+  if (el.matches("textarea.title") && !el.value.trim()) return renderPane(); // don't allow blank names
   if (el.matches("[data-field]") && ui.pane)
     act([
       [
@@ -532,6 +547,25 @@ document.addEventListener("change", (e) => {
         { [CFG.T.effort]: val() },
       ],
     ]);
+});
+
+document.addEventListener("input", (e) => {
+  // grow the name box as you type
+  if (e.target.matches("textarea.title")) {
+    e.target.style.height = "auto";
+    e.target.style.height = e.target.scrollHeight + "px";
+  }
+});
+
+document.addEventListener("dblclick", (e) => {
+  // double-click a task to rename it
+  const n = e.target.closest(".task .name");
+  if (!n) return;
+  const id = +noteOf(n).dataset.id,
+    cur = S.T.get(id)?.name,
+    name = prompt("Rename task:", cur);
+  if (name?.trim() && name.trim() !== cur)
+    act([["UpdateRecord", CFG.T.table, id, { [CFG.T.name]: name.trim() }]]);
 });
 
 document.addEventListener("submit", (e) => {
@@ -566,7 +600,16 @@ document.addEventListener("mouseover", (e) => {
 });
 
 document.addEventListener("keydown", (e) => {
-  if (e.target.matches("input, select")) return;
+  if (e.target.matches("textarea.title") && e.key === "Enter") {
+    e.preventDefault();
+    e.target.blur();
+    return;
+  }
+  if (e.target.matches("textarea.title") && e.key === "Escape") {
+    renderPane();
+    return;
+  }
+  if (e.target.matches("input, select, textarea")) return;
   const mod = e.ctrlKey || e.metaKey,
     s = ui.sel;
   if (mod && e.key === "c" && s && s.type !== "O" && s.id) {
