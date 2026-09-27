@@ -20,6 +20,7 @@ const CFG = {
     review: "Needs_Review",
     note: "Review_Note",
     proposed: "Proposed_By",
+    status: "Status",
   },
   D: {
     table: "Deliverables",
@@ -42,26 +43,30 @@ const CFG = {
 };
 // Capabilities and Deliverables have Impact/Effort (shown), *_Rollup (formula) and *_Estimate (entered).
 // Editable fields in the side pane, per level: [column, label, kind]
+const STATUSES = ["Not Started", "In Progress", "Review", "Done"];
+const CAP_STATUSES = ["Not Started", "In Progress", "Available"]; // "Available" counts as done
+// kind: "number", "urgency", or a list of choices
 const FIELDS = {
   O: [["Impact", "Impact", "number"]],
   C: [
+    ["Status", "Status", CAP_STATUSES],
     ["Impact_Estimate", "Impact estimate", "number"],
     ["Effort_Estimate", "Effort estimate", "number"],
   ],
   D: [
-    ["Status", "Status", "status"],
+    ["Status", "Status", STATUSES],
     ["Urgency", "Urgency", "urgency"],
     ["Impact_Estimate", "Impact estimate", "number"],
     ["Effort_Estimate", "Effort estimate", "number"],
   ],
 };
-const STATUSES = ["Not Started", "In Progress", "Review", "Done"];
 const URGENCY = ["", "Elevated", "High"]; // blank = normal
 const CHILD = { O: "C", C: "D", D: "T" };
 const PARENT = { C: "O", D: "C", T: "D" };
 const LABEL = { O: "outcome", C: "capability", D: "deliverable", T: "task" };
 const DONE = "Done",
-  NOT_STARTED = "Not Started";
+  NOT_STARTED = "Not Started",
+  AVAILABLE = "Available";
 
 const api = window.GRIST_MOCK || grist;
 const $ = (s, el = document) => el.querySelector(s);
@@ -112,10 +117,13 @@ async function load() {
       p.kids.forEach((id) => next[CHILD[k]].get(id).parents.push(p.id));
     }
   }
-  const pos = (x) => x.row.manualSort ?? x.id;
-  next.O = new Map(
-    [...next.O.values()].sort((a, b) => pos(a) - pos(b)).map((o) => [o.id, o]),
-  );
+  const pos = (x) => x.row.manualSort ?? x.id; // row order in Grist; used for outcome lists and the "Not linked" items
+  for (const k in next)
+    next[k] = new Map(
+      [...next[k].values()]
+        .sort((a, b) => pos(a) - pos(b))
+        .map((x) => [x.id, x]),
+    );
   S = next;
 }
 
@@ -165,10 +173,27 @@ const setKids = (type, parent, list) => [
 ];
 const nameOf = (type, id) => (id ? S[type].get(id)?.name : "Not linked");
 
-function move(type, id, from, to, index) {
+// "Not linked" items have no parent list, so their order is the table's row order (manualSort).
+function rowOrder(type, id, beforeId) {
+  const all = [...S[type].keys()].filter((x) => x !== id),
+    loose = kidsOf(type, 0).filter((x) => x !== id);
+  let at = all.indexOf(beforeId);
+  if (at < 0)
+    at = loose.length ? all.indexOf(loose[loose.length - 1]) + 1 : all.length;
+  all.splice(at, 0, id);
+  return [
+    "BulkUpdateRecord",
+    CFG[type].table,
+    all,
+    { manualSort: all.map((_, i) => i + 1) },
+  ];
+}
+
+function move(type, id, from, to, index, beforeId) {
   const acts = [];
+  if (!to) acts.push(rowOrder(type, id, beforeId));
   if (from === to) {
-    if (!to) return;
+    if (!to) return act(acts);
     const list = kidsOf(type, to),
       old = list.indexOf(id);
     list.splice(old, 1);
@@ -282,6 +307,8 @@ function capHTML(c, out) {
     .filter((d) => !(hideDone() && doneOf(d)));
   const shown = dels.filter(matches);
   if (q() && !matches(c) && !shown.length) return "";
+  const cst = special ? "" : c.row[CFG.C.status] || "";
+  if (hideDone() && cst === AVAILABLE) return "";
   const open =
     ui.expanded.has(ekey(out, c.id)) || !!(q() && shown.length && !matches(c));
   const list = q() && !matches(c) ? shown : dels;
@@ -295,6 +322,7 @@ function capHTML(c, out) {
     ${special ? "" : copies(c, "C")}
     <div class="meta">${special ? "" : reviewDot(c, "C")}<span>${dels.length} deliverable${dels.length === 1 ? "" : "s"}</span>
 
+      ${cst ? `<span class="pill${cst === AVAILABLE ? " ok" : ""}">${cst === AVAILABLE ? "✓ " : ""}${esc(cst)}</span>` : ""}
       ${c.row?.[CFG.C.proposed] ? `<span class="pill">${esc(c.row[CFG.C.proposed])}</span>` : ""}</div>
     ${special ? "" : metrics(c)}
     ${
@@ -379,11 +407,11 @@ function renderPane() {
     if (kind === "number")
       input = `<input type="number" step="any" data-field="${col}" value="${esc(v)}">`;
     else {
-      const opts =
-        kind === "status"
-          ? [...STATUSES, ...(v && !STATUSES.includes(v) ? [v] : [])]
+      const list = Array.isArray(kind),
+        opts = list
+          ? [...kind, ...(v && !kind.includes(v) ? [v] : [])]
           : URGENCY;
-      input = `<select data-field="${col}">${kind === "status" && !v ? `<option value="" selected></option>` : ""}${opts
+      input = `<select data-field="${col}">${list && !v ? `<option value="" selected></option>` : ""}${opts
         .map(
           (o) =>
             `<option value="${esc(o)}"${o === v ? " selected" : ""}>${esc(o || "Normal")}</option>`,
@@ -762,20 +790,22 @@ document.addEventListener("drop", (e) => {
     d = ui.drag;
   if (!t || !d) return;
   e.preventDefault();
-  let index = Infinity;
+  let index = Infinity,
+    beforeId = null;
   if (t.zone && marker) {
     // index among the parent's full child list, not just the visible ones
     const next = marker.nextElementSibling;
-    const full = t.parent ? kidsOf(d.type, t.parent) : [];
-    index =
-      next?.dataset?.type === d.type
-        ? full.indexOf(+next.dataset.id)
-        : full.length;
+    const full = kidsOf(d.type, t.parent);
+    beforeId =
+      next?.dataset?.type === d.type && +next.dataset.id
+        ? +next.dataset.id
+        : null;
+    index = beforeId ? full.indexOf(beforeId) : full.length;
     if (index < 0) index = full.length;
   }
   clearDrop();
   ui.drag = null;
-  move(d.type, d.id, d.parent, t.parent, index);
+  move(d.type, d.id, d.parent, t.parent, index, beforeId);
 });
 
 document.addEventListener("dragend", () => {

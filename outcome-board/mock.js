@@ -67,6 +67,9 @@
         ),
       );
     });
+  Object.values(db).forEach((rows) =>
+    rows.forEach((r) => (r.manualSort ??= r.id)),
+  );
   sync();
   const enc = (v) => (Array.isArray(v) ? ["L", ...v] : v);
   const dec = (v) => (Array.isArray(v) && v[0] === "L" ? v.slice(1) : v);
@@ -98,6 +101,7 @@
             const nid = Math.max(0, ...db[t].map((r) => r.id)) + 1,
               row = { id: nid };
             Object.entries(f).forEach(([k, v]) => (row[k] = dec(v)));
+            row.manualSort = nid;
             db[t].push(row);
             PAIRS.filter((p) => p[2] === t && row[p[3]]).forEach(
               ([pt, pc, , cc]) =>

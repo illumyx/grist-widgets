@@ -172,6 +172,10 @@ input {
   border-radius: 8px;
   background: rgba(0, 0, 0, 0.08);
 }
+.pill.ok {
+  background: #cfeedd;
+  color: #1d6b45;
+}
 .review {
   width: 8px;
   height: 8px;
