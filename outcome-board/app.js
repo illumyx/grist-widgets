@@ -73,6 +73,7 @@ const esc = (s) =>
 const refs = (v) => (Array.isArray(v) ? (v[0] === "L" ? v.slice(1) : v) : []);
 
 let S = { O: new Map(), C: new Map(), D: new Map(), T: new Map() };
+const ekey = (out, cap) => `${out}:${cap}`; // expanded state is per copy (outcome:capability)
 const ui = {
   expanded: new Set(),
   sel: null,
@@ -281,7 +282,8 @@ function capHTML(c, out) {
     .filter((d) => !(hideDone() && doneOf(d)));
   const shown = dels.filter(matches);
   if (q() && !matches(c) && !shown.length) return "";
-  const open = ui.expanded.has(c.id) || (q() && shown.length && !matches(c));
+  const open =
+    ui.expanded.has(ekey(out, c.id)) || !!(q() && shown.length && !matches(c));
   const list = q() && !matches(c) ? shown : dels;
   const urg = dels
     .filter((d) => !doneOf(d))
@@ -485,8 +487,8 @@ document.addEventListener("click", (e) => {
     return addRecord(b.dataset.add, +b.dataset.parent || 0);
   }
   if (t.closest("[data-toggle]")) {
-    const id = +note.dataset.id;
-    ui.expanded.has(id) ? ui.expanded.delete(id) : ui.expanded.add(id);
+    const k = ekey(+note.dataset.parent, +note.dataset.id);
+    ui.expanded.has(k) ? ui.expanded.delete(k) : ui.expanded.add(k);
     select(note);
     render();
     return;
@@ -511,7 +513,7 @@ document.addEventListener("click", (e) => {
     select(note);
     const s = selOf(note);
     if (s.type === "C" && s.id === 0) {
-      ui.expanded.add(0);
+      ui.expanded.add(ekey(0, 0));
       render();
     } else if (s.type !== "T" && (s.id || s.type === "D")) {
       ui.pane = { type: s.type, id: s.id };
@@ -788,8 +790,9 @@ document.addEventListener("dragend", () => {
 $("#search").addEventListener("input", render);
 $("#hideDone").addEventListener("change", render);
 $("#expandAll").addEventListener("click", () => {
-  S.C.forEach((_, id) => ui.expanded.add(id));
-  ui.expanded.add(0);
+  document
+    .querySelectorAll("#board .cap")
+    .forEach((c) => ui.expanded.add(ekey(+c.dataset.parent, +c.dataset.id)));
   render();
 });
 $("#collapseAll").addEventListener("click", () => {
