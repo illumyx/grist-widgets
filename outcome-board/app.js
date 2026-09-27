@@ -18,8 +18,7 @@ const CFG = {
     children: "Deliverables",
     parents: "Outcomes",
     review: "Needs_Review",
-    impact: "Overall_Impact",
-    effort: "Overall_Effort",
+    note: "Review_Note",
     proposed: "Proposed_By",
   },
   D: {
@@ -30,7 +29,7 @@ const CFG = {
     review: "Needs_Review",
     note: "Review_Note",
     status: "Status",
-    impact: "Impact",
+    urgency: "Urgency",
   },
   T: {
     table: "Tasks",
@@ -38,8 +37,26 @@ const CFG = {
     parents: "Deliverables",
     status: "Status",
     effort: "Effort",
+    urgency: "Urgency",
   },
 };
+// Capabilities and Deliverables have Impact/Effort (shown), *_Rollup (formula) and *_Estimate (entered).
+// Editable fields in the side pane, per level: [column, label, kind]
+const FIELDS = {
+  O: [["Impact", "Impact", "number"]],
+  C: [
+    ["Impact_Estimate", "Impact estimate", "number"],
+    ["Effort_Estimate", "Effort estimate", "number"],
+  ],
+  D: [
+    ["Status", "Status", "status"],
+    ["Urgency", "Urgency", "urgency"],
+    ["Impact_Estimate", "Impact estimate", "number"],
+    ["Effort_Estimate", "Effort estimate", "number"],
+  ],
+};
+const STATUSES = ["Not Started", "In Progress", "Review", "Done"];
+const URGENCY = ["", "Elevated", "High"]; // blank = normal
 const CHILD = { O: "C", C: "D", D: "T" };
 const PARENT = { C: "O", D: "C", T: "D" };
 const LABEL = { O: "outcome", C: "capability", D: "deliverable", T: "task" };
@@ -105,7 +122,9 @@ async function refresh(force) {
   // polling skips while you're dragging or typing; our own writes force it
   if (
     !force &&
-    (ui.drag || ui.busy || document.activeElement?.matches("input[type=text]"))
+    (ui.drag ||
+      ui.busy ||
+      document.activeElement?.matches("input:not([type=checkbox]), select"))
   )
     return;
   try {
@@ -225,14 +244,25 @@ const reviewDot = (x, level) =>
     : "";
 const num = (v) =>
   v === null || v === undefined || v === "" || typeof v === "object" ? null : v;
+const fmt = (v) => (Number.isInteger(v) ? v : +v.toFixed(1));
+function measure(x, m) {
+  // "Impact 16", or "Impact ~8" when it's only an estimate
+  const v = num(x.row?.[m]);
+  if (v === null) return "";
+  const est = m + "_Rollup" in x.row && num(x.row[m + "_Rollup"]) === null;
+  return `<span title="${est ? "Estimate" : "From linked items"}">${m} ${est ? "~" : ""}${fmt(v)}</span>`;
+}
+const urgRank = (u) => URGENCY.indexOf(u || "");
+const urgAttr = (u) => (u ? ` data-urgency="${esc(u)}"` : "");
+const paneIs = (type, id) => ui.pane?.type === type && ui.pane.id === id;
 
 function delHTML(d, cap) {
   const tasks = d.kids.map((t) => S.T.get(t)),
     done = tasks.filter(doneOf).length;
   const st = d.row[CFG.D.status] || "";
-  return `<div class="del${ui.pane === d.id ? " open" : ""}" draggable="true" tabindex="0" data-type="D" data-id="${d.id}" data-parent="${cap}" data-status="${esc(st)}">
+  return `<div class="del${paneIs("D", d.id) ? " open" : ""}" draggable="true" tabindex="0" data-type="D" data-id="${d.id}" data-parent="${cap}" data-status="${esc(st)}"${urgAttr(d.row[CFG.D.urgency])}>
     ${esc(d.name)}${copies(d, "D")}
-    <div class="meta">${reviewDot(d, "D")}${tasks.length ? `<span>${done}/${tasks.length} tasks</span>` : ""}${st ? `<span>${esc(st)}</span>` : ""}</div>
+    <div class="meta">${reviewDot(d, "D")}${tasks.length ? `<span>${done}/${tasks.length} tasks</span>` : ""}${st ? `<span>${esc(st)}</span>` : ""}${measure(d, "Impact")}${measure(d, "Effort")}</div>
     ${cap ? `<button class="x" data-unlink title="Remove from this capability" aria-label="Remove from this capability">×</button>` : ""}</div>`;
 }
 
@@ -245,17 +275,21 @@ function capHTML(c, out) {
   if (q() && !matches(c) && !shown.length) return "";
   const open = ui.expanded.has(c.id) || (q() && shown.length && !matches(c));
   const list = q() && !matches(c) ? shown : dels;
-  const imp = num(c.row?.[CFG.C.impact]),
-    eff = num(c.row?.[CFG.C.effort]);
-  return `<div class="cap${special ? " special" : ""}" ${special ? "" : 'draggable="true"'} tabindex="0" data-type="C" data-id="${c.id}" data-parent="${out}">
+  const urg = dels
+    .filter((d) => !doneOf(d))
+    .map((d) => d.row[CFG.D.urgency])
+    .sort((x, y) => urgRank(y) - urgRank(x))[0];
+  const orphanT = special ? kidsOf("T", 0).length : 0;
+  return `<div class="cap${special ? " special" : ""}${paneIs("C", c.id) && !special ? " open" : ""}" ${special ? "" : 'draggable="true"'} tabindex="0" data-type="C" data-id="${c.id}" data-parent="${out}"${urgAttr(urg)}>
     <div class="cap-title"><button class="chev" data-toggle aria-expanded="${open}" aria-label="${open ? "Collapse" : "Expand"}">${open ? "▾" : "▸"}</button>${esc(c.name)}</div>
     ${special ? "" : copies(c, "C")}
     <div class="meta">${special ? "" : reviewDot(c, "C")}<span>${dels.length} deliverable${dels.length === 1 ? "" : "s"}</span>
-      ${imp !== null ? `<span>Impact ${imp}</span>` : ""}${eff !== null ? `<span>Effort ${eff}</span>` : ""}
+      ${special ? "" : measure(c, "Impact") + measure(c, "Effort")}
       ${c.row?.[CFG.C.proposed] ? `<span class="pill">${esc(c.row[CFG.C.proposed])}</span>` : ""}</div>
     ${
       open
         ? `<div class="dels" data-drop="D" data-parent="${special ? 0 : c.id}">${list.map((d) => delHTML(d, special ? 0 : c.id)).join("")}
+      ${orphanT ? `<div class="del orphan${paneIs("D", 0) ? " open" : ""}" tabindex="0" data-type="D" data-id="0" data-parent="0">Tasks without a deliverable (${orphanT})</div>` : ""}
       ${special ? "" : `<button class="add" data-add="D" data-parent="${c.id}">+ Add deliverable</button>`}</div>`
         : ""
     }
@@ -277,8 +311,9 @@ function laneHTML(o) {
     });
   }
   const imp = o && num(o.row[CFG.O.impact]);
+  const open = o && paneIs("O", o.id);
   return `<section class="lane${o ? "" : " unlinked"}">
-    <div class="lane-head" tabindex="0" data-type="O" data-id="${id}" data-parent="0"${o ? ' draggable="true" title="Drag to reorder"' : ""}>${o ? esc(o.name) : "Not linked to an outcome"}
+    <div class="lane-head${open ? " open" : ""}" tabindex="0" data-type="O" data-id="${id}" data-parent="0"${o ? ' draggable="true" title="Drag to reorder"' : ""}>${o ? esc(o.name) : "Not linked to an outcome"}
       <span class="sub">${o ? `${o.kids.length} capabilit${o.kids.length === 1 ? "y" : "ies"}${imp !== null && imp !== undefined ? ` · impact ${imp}` : ""}${o.row[CFG.O.review] ? " · needs review" : ""}` : "Drag notes here to unlink them"}</span></div>
     <div class="lane-body" data-drop="C" data-parent="${id}">${caps.map((c) => capHTML(c, id)).join("")}
       <button class="add" data-add="C" data-parent="${id}">+ Add capability</button></div></section>`;
@@ -305,48 +340,78 @@ function render() {
 }
 
 function renderPane() {
-  const pane = $("#pane");
-  const closed = ui.pane === null || (ui.pane && !S.D.has(ui.pane));
-  document.body.classList.toggle("pane-open", !closed);
-  if (closed) {
+  const pane = $("#pane"),
+    p = ui.pane;
+  const x = !p
+    ? null
+    : p.type === "D" && p.id === 0
+      ? {
+          id: 0,
+          name: "Tasks without a deliverable",
+          kids: kidsOf("T", 0),
+          parents: [],
+          row: {},
+        }
+      : S[p.type].get(p.id);
+  document.body.classList.toggle("pane-open", !!x);
+  if (!x) {
     pane.hidden = true;
     ui.pane = null;
     return;
   }
-  const d = ui.pane
-    ? S.D.get(ui.pane)
-    : {
-        id: 0,
-        name: "Tasks without a deliverable",
-        kids: kidsOf("T", 0),
-        parents: [],
-        row: {},
-      };
-  const tasks = d.kids
-    .map((t) => S.T.get(t))
-    .filter((t) => !(hideDone() && doneOf(t)) && matchesTask(t));
-  const note = d.row[CFG.D.note];
   pane.hidden = false;
-  pane.innerHTML = `<div class="pane-head"><h2>${esc(d.name)}</h2>
+  const L = p.type,
+    note = x.row[CFG[L].note];
+  const field = ([col, label, kind]) => {
+    const v = x.row[col] ?? "";
+    let input;
+    if (kind === "number")
+      input = `<input type="number" step="any" data-field="${col}" value="${esc(v)}">`;
+    else {
+      const opts =
+        kind === "status"
+          ? [...STATUSES, ...(v && !STATUSES.includes(v) ? [v] : [])]
+          : URGENCY;
+      input = `<select data-field="${col}">${kind === "status" && !v ? `<option value="" selected></option>` : ""}${opts
+        .map(
+          (o) =>
+            `<option value="${esc(o)}"${o === v ? " selected" : ""}>${esc(o || "Normal")}</option>`,
+        )
+        .join("")}</select>`;
+    }
+    return `<label class="field"><span>${label}</span>${input}</label>`;
+  };
+  const sum = [measure(x, "Impact"), measure(x, "Effort")]
+    .filter(Boolean)
+    .join(" · ");
+  let html = `<div class="pane-head"><div class="kind">${LABEL[L]}</div><h2>${esc(x.name)}</h2>
       <button class="x" data-close aria-label="Close">×</button>
-      ${d.parents.length ? `<div class="chips">${d.parents.map((c) => `<span class="chip">${esc(nameOf("C", c))}</span>`).join("")}</div>` : ""}
-      ${note ? `<div class="pane-note">${esc(note)}</div>` : ""}</div>
-    <div class="tasks" data-drop="T" data-parent="${d.id}">
+      ${x.parents.length ? `<div class="chips">${x.parents.map((q) => `<span class="chip">${esc(nameOf(PARENT[L], q))}</span>`).join("")}</div>` : ""}
+      ${L !== "O" && sum ? `<div class="summary">${sum}</div>` : ""}
+      ${x.id && FIELDS[L] ? `<div class="fields">${FIELDS[L].map(field).join("")}</div>` : ""}
+      ${note ? `<div class="pane-note">${esc(note)}</div>` : ""}</div>`;
+  if (L === "D") {
+    const tasks = x.kids
+      .map((t) => S.T.get(t))
+      .filter((t) => !(hideDone() && doneOf(t)));
+    html += `<div class="tasks" data-drop="T" data-parent="${x.id}">
       ${
         tasks
-          .map(
-            (
-              t,
-            ) => `<div class="task${doneOf(t) ? " done" : ""}" draggable="true" tabindex="0" data-type="T" data-id="${t.id}" data-parent="${d.id}">
+          .map((t) => {
+            const u = t.row[CFG.T.urgency] || "";
+            return `<div class="task${doneOf(t) ? " done" : ""}" draggable="true" tabindex="0" data-type="T" data-id="${t.id}" data-parent="${x.id}">
         <input type="checkbox" data-check ${doneOf(t) ? "checked" : ""} aria-label="Done">
-        <span class="name">${esc(t.name)}${num(t.row[CFG.T.effort]) ? ` <span class="pill">${t.row[CFG.T.effort]}</span>` : ""}</span>
-        ${copies(t, "T")}${d.id ? `<button class="x" data-unlink title="Remove from this deliverable" aria-label="Remove from this deliverable">×</button>` : ""}</div>`,
-          )
+        <span class="name">${esc(t.name)}</span>
+        <button class="urg" data-urg data-u="${esc(u)}" title="Urgency: ${esc(u || "Normal")} (click to change)" aria-label="Urgency: ${esc(u || "Normal")}"></button>
+        <input class="teff" type="number" step="any" data-teffort value="${esc(num(t.row[CFG.T.effort]) ?? "")}" placeholder="effort" aria-label="Effort">
+        ${copies(t, "T")}${x.id ? `<button class="x" data-unlink title="Remove from this deliverable" aria-label="Remove from this deliverable">×</button>` : ""}</div>`;
+          })
           .join("") || `<div class="empty">No tasks yet.</div>`
       }</div>
-    ${d.id ? `<form data-addtask><input type="text" placeholder="Add a task and press Enter" aria-label="New task"></form>` : ""}`;
+      ${x.id ? `<form data-addtask><input type="text" placeholder="Add a task and press Enter" aria-label="New task"></form>` : ""}`;
+  }
+  pane.innerHTML = html;
 }
-const matchesTask = () => true; // the filter box applies to the board, not the checklist
 
 function findEl(sel) {
   const sc = sel.type === "T" ? $("#pane") : $("#board");
@@ -385,10 +450,22 @@ document.addEventListener("click", (e) => {
     note = noteOf(t);
   if (t.closest("[data-close]")) {
     ui.pane = null;
-    renderPane();
     render();
     return;
   }
+  if (t.closest("[data-urg]")) {
+    const u = t.closest("[data-urg]").dataset.u,
+      next = URGENCY[(urgRank(u) + 1) % URGENCY.length];
+    return act([
+      [
+        "UpdateRecord",
+        CFG.T.table,
+        +note.dataset.id,
+        { [CFG.T.urgency]: next || null },
+      ],
+    ]);
+  }
+  if (t.closest(".pane-head, .teff")) return;
   if (t.closest("[data-add]")) {
     const b = t.closest("[data-add]");
     return addRecord(b.dataset.add, +b.dataset.parent || 0);
@@ -418,15 +495,43 @@ document.addEventListener("click", (e) => {
   }
   if (note) {
     select(note);
-    if (note.dataset.type === "D") {
-      ui.pane = +note.dataset.id;
-      render();
-    }
-    if (note.dataset.type === "C" && +note.dataset.id === 0) {
+    const s = selOf(note);
+    if (s.type === "C" && s.id === 0) {
       ui.expanded.add(0);
+      render();
+    } else if (s.type !== "T" && (s.id || s.type === "D")) {
+      ui.pane = { type: s.type, id: s.id };
       render();
     }
   } else if (t.closest("#board")) select(null);
+});
+
+document.addEventListener("change", (e) => {
+  const el = e.target;
+  const val = () =>
+    el.type === "number"
+      ? el.value === ""
+        ? null
+        : +el.value
+      : el.value || null;
+  if (el.matches("[data-field]") && ui.pane)
+    act([
+      [
+        "UpdateRecord",
+        CFG[ui.pane.type].table,
+        ui.pane.id,
+        { [el.dataset.field]: val() },
+      ],
+    ]);
+  else if (el.matches("[data-teffort]"))
+    act([
+      [
+        "UpdateRecord",
+        CFG.T.table,
+        +noteOf(el).dataset.id,
+        { [CFG.T.effort]: val() },
+      ],
+    ]);
 });
 
 document.addEventListener("submit", (e) => {
@@ -434,14 +539,14 @@ document.addEventListener("submit", (e) => {
   e.preventDefault();
   const input = $("input", e.target),
     name = input.value.trim();
-  if (!name || !ui.pane) return;
+  if (!name || !paneIs("D", ui.pane?.id) || !ui.pane.id) return;
   input.value = "";
   act([
     [
       "AddRecord",
       CFG.T.table,
       null,
-      { [CFG.T.name]: name, [CFG.T.parents]: ["L", ui.pane] },
+      { [CFG.T.name]: name, [CFG.T.parents]: ["L", ui.pane.id] },
     ],
   ]).then(() => $("#pane form input")?.focus());
 });
@@ -461,7 +566,7 @@ document.addEventListener("mouseover", (e) => {
 });
 
 document.addEventListener("keydown", (e) => {
-  if (e.target.matches("input")) return;
+  if (e.target.matches("input, select")) return;
   const mod = e.ctrlKey || e.metaKey,
     s = ui.sel;
   if (mod && e.key === "c" && s && s.type !== "O" && s.id) {
@@ -479,7 +584,8 @@ document.addEventListener("keydown", (e) => {
     const c = ui.clip,
       want = PARENT[c.type];
     let target = null;
-    if (c.type === "T" && ui.pane) target = ui.pane;
+    if (c.type === "T" && ui.pane?.type === "D" && ui.pane.id)
+      target = ui.pane.id;
     else if (s?.type === want) target = s.id;
     else if (s?.type === c.type) target = s.parent;
     if (!target)
