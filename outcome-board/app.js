@@ -262,6 +262,11 @@ const q = () => $("#search").value.trim().toLowerCase();
 const hideDone = () => $("#hideDone").checked;
 const matches = (x) => !q() || x.name.toLowerCase().includes(q());
 const doneOf = (x) => (x.row[CFG.D.status] || x.row[CFG.T.status]) === DONE;
+const visible = (x) => !(hideDone() && doneOf(x));
+// true if any shown task (by id) matches the filter; lets a deliverable be found by its tasks
+const taskHit = (ids) =>
+  ids.some((t) => visible(S.T.get(t)) && matches(S.T.get(t)));
+const hit = (d) => matches(d) || taskHit(d.kids);
 const copies = (x, level) =>
   x.parents.length > 1
     ? `<span class="copies" title="On ${x.parents.length} ${LABEL[PARENT[level]]}s">×${x.parents.length}</span>`
@@ -302,21 +307,20 @@ function delHTML(d, cap) {
 
 function capHTML(c, out) {
   const special = c.id === 0;
-  const dels = c.kids
-    .map((d) => S.D.get(d))
-    .filter((d) => !(hideDone() && doneOf(d)));
-  const shown = dels.filter(matches);
-  if (q() && !matches(c) && !shown.length) return "";
+  const dels = c.kids.map((d) => S.D.get(d)).filter(visible);
+  const shown = dels.filter(hit);
+  const orphanT = special ? kidsOf("T", 0) : [];
+  const orphanHit = taskHit(orphanT);
+  const filtering = q() && !matches(c); // card is only here for its matching deliverables/tasks
+  if (filtering && !shown.length && !orphanHit) return "";
   const cst = special ? "" : c.row[CFG.C.status] || "";
   if (hideDone() && cst === AVAILABLE) return "";
-  const open =
-    ui.expanded.has(ekey(out, c.id)) || !!(q() && shown.length && !matches(c));
-  const list = q() && !matches(c) ? shown : dels;
+  const open = ui.expanded.has(ekey(out, c.id)) || !!filtering;
+  const list = filtering ? shown : dels;
   const urg = dels
     .filter((d) => !doneOf(d))
     .map((d) => d.row[CFG.D.urgency])
     .sort((x, y) => urgRank(y) - urgRank(x))[0];
-  const orphanT = special ? kidsOf("T", 0).length : 0;
   return `<div class="cap${special ? " special" : ""}${paneIs("C", c.id) && !special ? " open" : ""}" ${special ? "" : 'draggable="true"'} tabindex="0" data-type="C" data-id="${c.id}" data-parent="${out}"${urgAttr(urg)}>
     <div class="cap-title"><button class="chev" data-toggle aria-expanded="${open}" aria-label="${open ? "Collapse" : "Expand"}">${open ? "▾" : "▸"}</button>${esc(c.name)}</div>
     ${special ? "" : copies(c, "C")}
@@ -328,7 +332,7 @@ function capHTML(c, out) {
     ${
       open
         ? `<div class="dels" data-drop="D" data-parent="${special ? 0 : c.id}">${list.map((d) => delHTML(d, special ? 0 : c.id)).join("")}
-      ${orphanT ? `<div class="del orphan${paneIs("D", 0) ? " open" : ""}" tabindex="0" data-type="D" data-id="0" data-parent="0">Tasks without a deliverable (${orphanT})</div>` : ""}
+      ${orphanT.length && (!filtering || orphanHit) ? `<div class="del orphan${paneIs("D", 0) ? " open" : ""}" tabindex="0" data-type="D" data-id="0" data-parent="0">Tasks without a deliverable (${orphanT.length})</div>` : ""}
       ${special ? "" : `<button class="add" data-add="D" data-parent="${c.id}">+ Add deliverable</button>`}</div>`
         : ""
     }
@@ -430,15 +434,13 @@ function renderPane() {
       ${x.id && FIELDS[L] ? `<div class="fields">${FIELDS[L].map(field).join("")}</div>` : ""}
       ${note ? `<div class="pane-note">${esc(note)}</div>` : ""}</div>`;
   if (L === "D") {
-    const tasks = x.kids
-      .map((t) => S.T.get(t))
-      .filter((t) => !(hideDone() && doneOf(t)));
+    const tasks = x.kids.map((t) => S.T.get(t)).filter(visible);
     html += `<div class="tasks" data-drop="T" data-parent="${x.id}">
       ${
         tasks
           .map((t) => {
             const u = t.row[CFG.T.urgency] || "";
-            return `<div class="task${doneOf(t) ? " done" : ""}" draggable="true" tabindex="0" data-type="T" data-id="${t.id}" data-parent="${x.id}">
+            return `<div class="task${doneOf(t) ? " done" : ""}${q() && matches(t) ? " hit" : ""}" draggable="true" tabindex="0" data-type="T" data-id="${t.id}" data-parent="${x.id}">
         <input type="checkbox" data-check ${doneOf(t) ? "checked" : ""} aria-label="Done">
         <span class="name">${esc(t.name)}</span>
         <button class="urg" data-urg data-u="${esc(u)}" title="Urgency: ${esc(u || "Normal")} (click to change)" aria-label="Urgency: ${esc(u || "Normal")}"></button>
@@ -706,10 +708,39 @@ function dropTarget(e) {
   return null;
 }
 
+// While dragging, scroll the board (left/right) or the list under the pointer (up/down)
+// when the pointer is near its edge; faster the closer to the edge.
+const EDGE = 50, // px from the edge where scrolling starts
+  SPEED = 20; // px per frame at the very edge
+const edgeStep = (p, lo, hi) =>
+  p >= lo && p < lo + EDGE
+    ? -SPEED * (1 - (p - lo) / EDGE)
+    : p <= hi && p > hi - EDGE
+      ? SPEED * (1 - (hi - p) / EDGE)
+      : 0;
+let pointer = null; // last dragover position, set below
+function autoScroll() {
+  if (!ui.drag) return (pointer = null);
+  if (pointer) {
+    const board = $("#board"),
+      list = pointer.el.closest(".lane-body, .tasks");
+    if (pointer.el.closest("#board")) {
+      const r = board.getBoundingClientRect();
+      board.scrollLeft += edgeStep(pointer.x, r.left, r.right);
+    }
+    if (list) {
+      const r = list.getBoundingClientRect();
+      list.scrollTop += edgeStep(pointer.y, r.top, r.bottom);
+    }
+  }
+  requestAnimationFrame(autoScroll);
+}
+
 document.addEventListener("dragstart", (e) => {
   const n = noteOf(e.target);
   if (!n || !n.draggable) return;
   ui.drag = selOf(n);
+  requestAnimationFrame(autoScroll);
   e.dataTransfer.effectAllowed = "move";
   e.dataTransfer.setData("text/plain", n.dataset.id);
   requestAnimationFrame(() => n.classList.add("dragging"));
@@ -731,6 +762,7 @@ function laneSlot(e) {
 }
 
 document.addEventListener("dragover", (e) => {
+  pointer = { x: e.clientX, y: e.clientY, el: e.target };
   if (ui.drag?.type === "O") {
     if (!e.target.closest("#board")) return;
     e.preventDefault();

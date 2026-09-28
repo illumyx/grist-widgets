@@ -543,6 +543,9 @@ textarea.title:focus {
   text-decoration: line-through;
   color: var(--muted);
 }
+.task.hit {
+  background: var(--cap); /* matches the filter */
+}
 .task .copies {
   top: 6px;
   right: 24px;

@@ -4,6 +4,7 @@ Outcomes are lists, capabilities are sticky notes, deliverables are small notes 
 and clicking a deliverable opens its task checklist. Every link is many-to-many.
 
 - Drag a note to move it (between lists, between capability cards, or a task onto a deliverable).
+  Dragging near the edge of the board or a list scrolls it.
 - To link a note in a second place: click it, Ctrl/Cmd+C, click the destination (a list header,
   a capability, or open a deliverable), Ctrl/Cmd+V.
 - × on a note (or Delete) removes that one link. Nothing is ever deleted from the tables.
@@ -16,6 +17,7 @@ and clicking a deliverable opens its task checklist. Every link is many-to-many.
 - Edit a name at the top of the side pane (Enter saves, Esc cancels); double-click a task to rename it.
 - Tasks: tick to mark done, click the small square to cycle urgency (normal / yellow / red), type an effort.
 - Yellow/red banners show Elevated/High urgency; a capability shows the highest urgency among its open deliverables.
+- The filter matches capability, deliverable, and task names; matching tasks are highlighted in the side pane.
 
 When you change app.js or style.css, bump the `?v=` numbers in index.html so browsers fetch the new files.
 
