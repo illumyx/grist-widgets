@@ -106,7 +106,7 @@
             PAIRS.filter((p) => p[2] === t && row[p[3]]).forEach(
               ([pt, pc, , cc]) =>
                 row[cc].forEach((pid) =>
-                  db[pt].find((r) => r.id === pid)[pc].push(nid),
+                  (db[pt].find((r) => r.id === pid)[pc] ??= []).push(nid),
                 ),
             );
           } else throw new Error("mock: unsupported action " + op);

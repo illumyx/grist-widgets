@@ -86,6 +86,7 @@ const ui = {
   pane: null,
   drag: null,
   busy: false,
+  draft: null, // name being typed in place: {type, parent, text} for a new record, plus id to rename a task
 };
 
 // ---- Data ------------------------------------------------------------------------------------------
@@ -246,15 +247,17 @@ function unlink(type, id, from) {
   );
 }
 
-function addRecord(type, parent) {
-  const name = prompt(`New ${LABEL[type]}:`);
-  if (!name?.trim()) return;
-  const fields = { [CFG[type].name]: name.trim() };
-  if (parent) fields[CFG[type].parents] = ["L", parent];
-  act(
-    [["AddRecord", CFG[type].table, null, fields]],
-    `Added “${name.trim()}”.`,
-  );
+// Save the in-place draft: add the new record, or rename the task. A blank or unchanged name just closes it.
+function saveDraft() {
+  const d = ui.draft,
+    name = d.text.trim();
+  ui.draft = null;
+  if (!name || (d.id && name === S.T.get(d.id)?.name)) return render();
+  if (d.id)
+    return act([["UpdateRecord", CFG.T.table, d.id, { [CFG.T.name]: name }]]);
+  const fields = { [CFG[d.type].name]: name };
+  if (d.parent) fields[CFG[d.type].parents] = ["L", d.parent];
+  act([["AddRecord", CFG[d.type].table, null, fields]], `Added “${name}”.`);
 }
 
 // ---- Rendering -------------------------------------------------------------------------------------
@@ -295,6 +298,22 @@ const urgRank = (u) => URGENCY.indexOf(u || "");
 const urgAttr = (u) => (u ? ` data-urgency="${esc(u)}"` : "");
 const paneIs = (type, id) => ui.pane?.type === type && ui.pane.id === id;
 
+const draftHTML = (label, text = "") =>
+  `<textarea class="draft" rows="1" placeholder="New ${label}" aria-label="Name">${esc(text)}</textarea>`;
+function addHTML(type, parent) {
+  // "+ Add ..." button, or the new note being named in its place
+  const d = ui.draft;
+  if (d && !d.id && d.type === type && d.parent === parent) {
+    const box = draftHTML(LABEL[type], d.text);
+    return {
+      O: `<section class="lane"><div class="lane-head">${box}</div></section>`,
+      C: `<div class="cap">${box}</div>`,
+      D: `<div class="del">${box}</div>`,
+    }[type];
+  }
+  return `<button class="${type === "O" ? "add-lane" : "add"}" data-add="${type}" data-parent="${parent}">+ Add ${LABEL[type]}</button>`;
+}
+
 function delHTML(d, cap) {
   const tasks = d.kids.map((t) => S.T.get(t)),
     done = tasks.filter(doneOf).length;
@@ -333,7 +352,7 @@ function capHTML(c, out) {
       open
         ? `<div class="dels" data-drop="D" data-parent="${special ? 0 : c.id}">${list.map((d) => delHTML(d, special ? 0 : c.id)).join("")}
       ${orphanT.length && (!filtering || orphanHit) ? `<div class="del orphan${paneIs("D", 0) ? " open" : ""}" tabindex="0" data-type="D" data-id="0" data-parent="0">Tasks without a deliverable (${orphanT.length})</div>` : ""}
-      ${special ? "" : `<button class="add" data-add="D" data-parent="${c.id}">+ Add deliverable</button>`}</div>`
+      ${special ? "" : addHTML("D", c.id)}</div>`
         : ""
     }
     ${out && !special ? `<button class="x" data-unlink title="Remove from this outcome" aria-label="Remove from this outcome">×</button>` : ""}</div>`;
@@ -359,7 +378,7 @@ function laneHTML(o) {
     <div class="lane-head${open ? " open" : ""}" tabindex="0" data-type="O" data-id="${id}" data-parent="0"${o ? ' draggable="true" title="Drag to reorder"' : ""}>${o ? esc(o.name) : "Not linked to an outcome"}
       <span class="sub">${o ? `${o.kids.length} capabilit${o.kids.length === 1 ? "y" : "ies"}${imp !== null && imp !== undefined ? ` · impact ${imp}` : ""}${o.row[CFG.O.review] ? " · needs review" : ""}` : "Drag notes here to unlink them"}</span></div>
     <div class="lane-body" data-drop="C" data-parent="${id}">${caps.map((c) => capHTML(c, id)).join("")}
-      <button class="add" data-add="C" data-parent="${id}">+ Add capability</button></div></section>`;
+      ${addHTML("C", id)}</div></section>`;
 }
 
 function render() {
@@ -367,9 +386,7 @@ function render() {
     scroll = [...board.querySelectorAll(".lane-body")].map((e) => e.scrollTop),
     left = board.scrollLeft;
   board.innerHTML =
-    laneHTML(null) +
-    [...S.O.values()].map(laneHTML).join("") +
-    `<button class="add-lane" data-add="O">+ Add outcome</button>`;
+    laneHTML(null) + [...S.O.values()].map(laneHTML).join("") + addHTML("O", 0);
   board
     .querySelectorAll(".lane-body")
     .forEach((e, i) => (e.scrollTop = scroll[i] || 0));
@@ -380,6 +397,12 @@ function render() {
     else ui.sel = null;
   }
   renderPane();
+  const draft = $(".draft");
+  if (draft && document.activeElement !== draft) {
+    grow(draft);
+    draft.focus();
+    draft.setSelectionRange(draft.value.length, draft.value.length);
+  }
 }
 
 function renderPane() {
@@ -442,7 +465,7 @@ function renderPane() {
             const u = t.row[CFG.T.urgency] || "";
             return `<div class="task${doneOf(t) ? " done" : ""}${q() && matches(t) ? " hit" : ""}" draggable="true" tabindex="0" data-type="T" data-id="${t.id}" data-parent="${x.id}">
         <input type="checkbox" data-check ${doneOf(t) ? "checked" : ""} aria-label="Done">
-        <span class="name">${esc(t.name)}</span>
+        ${ui.draft?.id === t.id ? draftHTML(LABEL.T, ui.draft.text) : `<span class="name">${esc(t.name)}</span>`}
         <button class="urg" data-urg data-u="${esc(u)}" title="Urgency: ${esc(u || "Normal")} (click to change)" aria-label="Urgency: ${esc(u || "Normal")}"></button>
         <input class="teff" type="number" step="any" data-teffort value="${esc(num(t.row[CFG.T.effort]) ?? "")}" placeholder="effort" aria-label="Effort">
         ${copies(t, "T")}${x.id ? `<button class="x" data-unlink title="Remove from this deliverable" aria-label="Remove from this deliverable">×</button>` : ""}</div>`;
@@ -453,11 +476,13 @@ function renderPane() {
   }
   pane.innerHTML = html;
   const title = $("textarea.title", pane);
-  if (title) {
-    title.style.height = "auto";
-    title.style.height = title.scrollHeight + "px";
-  }
+  if (title) grow(title);
 }
+const grow = (el) => {
+  // fit a textarea's height to its text
+  el.style.height = "auto";
+  el.style.height = el.scrollHeight + "px";
+};
 
 function findEl(sel) {
   const sc = sel.type === "T" ? $("#pane") : $("#board");
@@ -512,9 +537,15 @@ document.addEventListener("click", (e) => {
     ]);
   }
   if (t.closest(".pane-head, .teff")) return;
+  if (t.closest(".draft")) return;
   if (t.closest("[data-add]")) {
     const b = t.closest("[data-add]");
-    return addRecord(b.dataset.add, +b.dataset.parent || 0);
+    ui.draft = {
+      type: b.dataset.add,
+      parent: +b.dataset.parent || 0,
+      text: "",
+    };
+    return render();
   }
   if (t.closest("[data-toggle]")) {
     const k = ekey(+note.dataset.parent, +note.dataset.id);
@@ -583,21 +614,23 @@ document.addEventListener("change", (e) => {
 
 document.addEventListener("input", (e) => {
   // grow the name box as you type
-  if (e.target.matches("textarea.title")) {
-    e.target.style.height = "auto";
-    e.target.style.height = e.target.scrollHeight + "px";
-  }
+  if (e.target.matches("textarea.title, .draft")) grow(e.target);
+  if (e.target.matches(".draft")) ui.draft.text = e.target.value;
 });
 
 document.addEventListener("dblclick", (e) => {
   // double-click a task to rename it
   const n = e.target.closest(".task .name");
   if (!n) return;
-  const id = +noteOf(n).dataset.id,
-    cur = S.T.get(id)?.name,
-    name = prompt("Rename task:", cur);
-  if (name?.trim() && name.trim() !== cur)
-    act([["UpdateRecord", CFG.T.table, id, { [CFG.T.name]: name.trim() }]]);
+  const id = +noteOf(n).dataset.id;
+  ui.draft = { type: "T", id, text: S.T.get(id)?.name ?? "" };
+  render();
+});
+
+document.addEventListener("focusout", (e) => {
+  // leaving the draft saves it; switching to another window (document loses focus) keeps it open
+  if (e.target.matches(".draft") && ui.draft && document.hasFocus())
+    saveDraft();
 });
 
 document.addEventListener("submit", (e) => {
@@ -632,6 +665,16 @@ document.addEventListener("mouseover", (e) => {
 });
 
 document.addEventListener("keydown", (e) => {
+  if (e.target.matches(".draft")) {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      e.target.blur(); // saves, via focusout
+    } else if (e.key === "Escape") {
+      ui.draft = null;
+      render();
+    }
+    return;
+  }
   if (e.target.matches("textarea.title") && e.key === "Enter") {
     e.preventDefault();
     e.target.blur();
@@ -739,6 +782,7 @@ function autoScroll() {
 document.addEventListener("dragstart", (e) => {
   const n = noteOf(e.target);
   if (!n || !n.draggable) return;
+  if (document.activeElement?.matches(".draft")) return e.preventDefault(); // selecting text in a draft
   ui.drag = selOf(n);
   requestAnimationFrame(autoScroll);
   e.dataTransfer.effectAllowed = "move";
