@@ -7,7 +7,9 @@ and clicking a deliverable opens its task checklist. Every link is many-to-many.
   Dragging near the edge of the board or a list scrolls it.
 - To link a note in a second place: click it, Ctrl/Cmd+C, click the destination (a list header,
   a capability, or open a deliverable), Ctrl/Cmd+V.
-- × on a note (or Delete) removes that one link. Nothing is ever deleted from the tables.
+- × on a note (or the Delete key) removes that one link; the record itself stays.
+- To delete a record, use Delete at the bottom of its side pane (or the trash icon on a task). You can
+  also delete what's linked only under it; anything also linked elsewhere is kept.
 - Items in "Not linked to an outcome" can be dragged into any order (saved as the table's row order).
 - "Not linked to an outcome" holds unlinked capabilities and a bucket of deliverables without a capability.
 - ×N means the note appears in N places; hovering outlines the other copies.

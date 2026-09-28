@@ -64,6 +64,13 @@ const URGENCY = ["", "Elevated", "High"]; // blank = normal
 const CHILD = { O: "C", C: "D", D: "T" };
 const PARENT = { C: "O", D: "C", T: "D" };
 const LABEL = { O: "outcome", C: "capability", D: "deliverable", T: "task" };
+const PLURAL = {
+  O: "outcomes",
+  C: "capabilities",
+  D: "deliverables",
+  T: "tasks",
+};
+const plural = (n, type) => `${n} ${n === 1 ? LABEL[type] : PLURAL[type]}`;
 const DONE = "Done",
   NOT_STARTED = "Not Started",
   AVAILABLE = "Available";
@@ -87,6 +94,7 @@ const ui = {
   drag: null,
   busy: false,
   draft: null, // name being typed in place: {type, parent, text} for a new record, plus id to rename a task
+  confirm: null, // {type, id} of the item whose delete is waiting for confirmation
 };
 
 // ---- Data ------------------------------------------------------------------------------------------
@@ -260,6 +268,31 @@ function saveDraft() {
   act([["AddRecord", CFG[d.type].table, null, fields]], `Added “${name}”.`);
 }
 
+// Items that would be left with no parent if (type, id) were deleted, per level: {C: [ids], D: [...], ...}.
+// Something also linked to a parent that stays is kept.
+function below(type, id) {
+  const gone = { [type]: [id] };
+  for (let p = type, k = CHILD[type]; k; p = k, k = CHILD[k])
+    gone[k] = [...S[k].values()]
+      .filter(
+        (x) => x.parents.length && x.parents.every((q) => gone[p].includes(q)),
+      )
+      .map((x) => x.id);
+  return gone;
+}
+
+function remove({ type, id }, withBelow) {
+  const gone = withBelow ? below(type, id) : { [type]: [id] },
+    n = Object.values(gone).flat().length - 1;
+  ui.confirm = null;
+  act(
+    Object.entries(gone)
+      .filter(([, ids]) => ids.length)
+      .map(([k, ids]) => ["BulkRemoveRecord", CFG[k].table, ids]),
+    `Deleted “${nameOf(type, id)}”${n ? ` and ${n} item${n === 1 ? "" : "s"} below it` : ""}.`,
+  );
+}
+
 // ---- Rendering -------------------------------------------------------------------------------------
 const q = () => $("#search").value.trim().toLowerCase();
 const hideDone = () => $("#hideDone").checked;
@@ -272,7 +305,7 @@ const taskHit = (ids) =>
 const hit = (d) => matches(d) || taskHit(d.kids);
 const copies = (x, level) =>
   x.parents.length > 1
-    ? `<span class="copies" title="On ${x.parents.length} ${LABEL[PARENT[level]]}s">×${x.parents.length}</span>`
+    ? `<span class="copies" title="On ${plural(x.parents.length, PARENT[level])}">×${x.parents.length}</span>`
     : "";
 const reviewDot = (x, level) =>
   x.row[CFG[level].review]
@@ -297,6 +330,31 @@ const metrics = (x) => {
 const urgRank = (u) => URGENCY.indexOf(u || "");
 const urgAttr = (u) => (u ? ` data-urgency="${esc(u)}"` : "");
 const paneIs = (type, id) => ui.pane?.type === type && ui.pane.id === id;
+
+const TRASH = `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2.5 4h11M6 4V2.5h4V4M4 4l.7 9.5h6.6L12 4M6.8 6.5v5M9.2 6.5v5"/></svg>`;
+function confirmHTML({ type, id }) {
+  // "Delete X?" with the choice to also delete what's only linked under it
+  const x = S[type].get(id),
+    gone = below(type, id);
+  const more = Object.entries(gone)
+    .filter(([k, ids]) => k !== type && ids.length)
+    .map(([k, ids]) => plural(ids.length, k))
+    .join(", ");
+  const where =
+    x.parents.length > 1
+      ? ` It's on ${plural(x.parents.length, PARENT[type])}.`
+      : "";
+  return `<div class="confirm"><span>Delete “${esc(x.name)}”?${where}</span>
+    ${
+      more
+        ? `<button class="danger" data-go="one" title="What's under it moves to Not linked">Delete only this</button>
+      <button class="danger" data-go="all">Delete with ${more}</button>`
+        : `<button class="danger" data-go="all">Delete</button>`
+    }
+    <button data-cancel>Cancel</button></div>`;
+}
+const confirming = (type, id) =>
+  ui.confirm?.type === type && ui.confirm.id === id;
 
 const draftHTML = (label, text = "") =>
   `<textarea class="draft" rows="1" placeholder="New ${label}" aria-label="Name">${esc(text)}</textarea>`;
@@ -463,17 +521,22 @@ function renderPane() {
         tasks
           .map((t) => {
             const u = t.row[CFG.T.urgency] || "";
+            if (confirming("T", t.id))
+              return `<div class="task" data-type="T" data-id="${t.id}" data-parent="${x.id}">${confirmHTML(ui.confirm)}</div>`;
             return `<div class="task${doneOf(t) ? " done" : ""}${q() && matches(t) ? " hit" : ""}" draggable="true" tabindex="0" data-type="T" data-id="${t.id}" data-parent="${x.id}">
         <input type="checkbox" data-check ${doneOf(t) ? "checked" : ""} aria-label="Done">
         ${ui.draft?.id === t.id ? draftHTML(LABEL.T, ui.draft.text) : `<span class="name">${esc(t.name)}</span>`}
         <button class="urg" data-urg data-u="${esc(u)}" title="Urgency: ${esc(u || "Normal")} (click to change)" aria-label="Urgency: ${esc(u || "Normal")}"></button>
         <input class="teff" type="number" step="any" data-teffort value="${esc(num(t.row[CFG.T.effort]) ?? "")}" placeholder="effort" aria-label="Effort">
+        <button class="trash" data-delete title="Delete task" aria-label="Delete task">${TRASH}</button>
         ${copies(t, "T")}${x.id ? `<button class="x" data-unlink title="Remove from this deliverable" aria-label="Remove from this deliverable">×</button>` : ""}</div>`;
           })
           .join("") || `<div class="empty">No tasks yet.</div>`
       }</div>
       ${x.id ? `<form data-addtask><input type="text" placeholder="Add a task and press Enter" aria-label="New task"></form>` : ""}`;
   }
+  if (x.id)
+    html += `<div class="pane-foot">${confirming(L, x.id) ? confirmHTML(ui.confirm) : `<button class="danger-link" data-delete>Delete ${LABEL[L]}</button>`}</div>`;
   pane.innerHTML = html;
   const title = $("textarea.title", pane);
   if (title) grow(title);
@@ -524,6 +587,19 @@ document.addEventListener("click", (e) => {
     render();
     return;
   }
+  if (t.closest("[data-delete]")) {
+    // a task's trash button, or the pane's Delete button
+    ui.confirm = t.closest(".task")
+      ? { type: "T", id: +note.dataset.id }
+      : { ...ui.pane };
+    return render();
+  }
+  if (t.closest("[data-cancel]")) {
+    ui.confirm = null;
+    return render();
+  }
+  if (t.closest("[data-go]"))
+    return remove(ui.confirm, t.closest("[data-go]").dataset.go === "all");
   if (t.closest("[data-urg]")) {
     const u = t.closest("[data-urg]").dataset.u,
       next = URGENCY[(urgRank(u) + 1) % URGENCY.length];
@@ -578,6 +654,7 @@ document.addEventListener("click", (e) => {
       render();
     } else if (s.type !== "T" && (s.id || s.type === "D")) {
       ui.pane = { type: s.type, id: s.id };
+      ui.confirm = null;
       render();
     }
   } else if (t.closest("#board")) select(null);
@@ -723,6 +800,7 @@ document.addEventListener("keydown", (e) => {
   } else if (e.key === "Escape") {
     select(null);
     ui.pane = null;
+    ui.confirm = null;
     render();
   } else if (e.key === "Enter" && e.target.matches("[data-type]")) {
     e.target.click();

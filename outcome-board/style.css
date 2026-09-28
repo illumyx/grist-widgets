@@ -569,6 +569,62 @@ textarea.title:focus {
 .task.hit {
   background: var(--cap); /* matches the filter */
 }
+.trash {
+  flex: 0 0 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  opacity: 0;
+}
+.task:hover > .trash,
+.trash:focus {
+  opacity: 1;
+}
+.trash:hover {
+  color: var(--review);
+}
+/* Delete: pane footer button and the inline confirmation (pane or task row) */
+.pane-foot {
+  margin-top: auto;
+  padding: 8px 16px 12px;
+  border-top: 1px solid #e3e7eb;
+}
+.danger-link {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--review);
+  font-size: 13px;
+  cursor: pointer;
+}
+.danger-link:hover {
+  text-decoration: underline;
+}
+.confirm {
+  flex: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.confirm span {
+  flex-basis: 100%;
+}
+.confirm button {
+  padding: 3px 10px;
+  border: 1px solid #b8c2cb;
+  border-radius: 4px;
+  background: #fff;
+  cursor: pointer;
+}
+.confirm button.danger {
+  background: var(--review);
+  border-color: var(--review);
+  color: #fff;
+}
 .task .copies {
   top: 6px;
   right: 24px;

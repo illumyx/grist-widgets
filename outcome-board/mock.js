@@ -109,6 +109,14 @@
                   (db[pt].find((r) => r.id === pid)[pc] ??= []).push(nid),
                 ),
             );
+          } else if (op === "BulkRemoveRecord") {
+            // like Grist: drop the rows and any references to them
+            db[t] = db[t].filter((r) => !id.includes(r.id));
+            PAIRS.filter((p) => p[2] === t).forEach(([pt, pc]) =>
+              db[pt].forEach(
+                (r) => (r[pc] = (r[pc] || []).filter((x) => !id.includes(x))),
+              ),
+            );
           } else throw new Error("mock: unsupported action " + op);
         }
         sync();
