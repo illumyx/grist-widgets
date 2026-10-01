@@ -9,7 +9,6 @@ const CFG = {
     table: "Outcomes",
     name: "Outcome",
     children: "Capabilities",
-    review: "Needs_Review",
     impact: "Impact",
   },
   C: {
@@ -17,7 +16,6 @@ const CFG = {
     name: "Capability",
     children: "Deliverables",
     parents: "Outcomes",
-    review: "Needs_Review",
     note: "Review_Note",
     proposed: "Proposed_By",
     status: "Status",
@@ -27,7 +25,6 @@ const CFG = {
     name: "Deliverable",
     children: "Tasks",
     parents: "Capabilities",
-    review: "Needs_Review",
     note: "Review_Note",
     status: "Status",
     urgency: "Urgency",
@@ -307,10 +304,6 @@ const copies = (x, level) =>
   x.parents.length > 1
     ? `<span class="copies" title="On ${plural(x.parents.length, PARENT[level])}">×${x.parents.length}</span>`
     : "";
-const reviewDot = (x, level) =>
-  x.row[CFG[level].review]
-    ? `<span class="review" title="Needs review"></span>`
-    : "";
 const num = (v) =>
   v === null || v === undefined || v === "" || typeof v === "object" ? null : v;
 const fmt = (v) => (Number.isInteger(v) ? v : +v.toFixed(1));
@@ -378,7 +371,7 @@ function delHTML(d, cap) {
   const st = d.row[CFG.D.status] || "";
   return `<div class="del${paneIs("D", d.id) ? " open" : ""}" draggable="true" tabindex="0" data-type="D" data-id="${d.id}" data-parent="${cap}" data-status="${esc(st)}"${urgAttr(d.row[CFG.D.urgency])}>
     ${esc(d.name)}${copies(d, "D")}
-    <div class="meta">${reviewDot(d, "D")}${tasks.length ? `<span>${done}/${tasks.length} tasks</span>` : ""}${st ? `<span>${esc(st)}</span>` : ""}</div>${metrics(d)}
+    <div class="meta">${tasks.length ? `<span>${done}/${tasks.length} tasks</span>` : ""}${st ? `<span>${esc(st)}</span>` : ""}</div>${metrics(d)}
     ${cap ? `<button class="x" data-unlink title="Remove from this capability" aria-label="Remove from this capability">×</button>` : ""}</div>`;
 }
 
@@ -401,7 +394,7 @@ function capHTML(c, out) {
   return `<div class="cap${special ? " special" : ""}${paneIs("C", c.id) && !special ? " open" : ""}" ${special ? "" : 'draggable="true"'} tabindex="0" data-type="C" data-id="${c.id}" data-parent="${out}"${urgAttr(urg)}>
     <div class="cap-title"><button class="chev" data-toggle aria-expanded="${open}" aria-label="${open ? "Collapse" : "Expand"}">${open ? "▾" : "▸"}</button>${esc(c.name)}</div>
     ${special ? "" : copies(c, "C")}
-    <div class="meta">${special ? "" : reviewDot(c, "C")}<span>${dels.length} deliverable${dels.length === 1 ? "" : "s"}</span>
+    <div class="meta"><span>${dels.length} deliverable${dels.length === 1 ? "" : "s"}</span>
 
       ${cst ? `<span class="pill${cst === AVAILABLE ? " ok" : ""}">${cst === AVAILABLE ? "✓ " : ""}${esc(cst)}</span>` : ""}
       ${c.row?.[CFG.C.proposed] ? `<span class="pill">${esc(c.row[CFG.C.proposed])}</span>` : ""}</div>
@@ -434,7 +427,7 @@ function laneHTML(o) {
   const open = o && paneIs("O", o.id);
   return `<section class="lane${o ? "" : " unlinked"}">
     <div class="lane-head${open ? " open" : ""}" tabindex="0" data-type="O" data-id="${id}" data-parent="0"${o ? ' draggable="true" title="Drag to reorder"' : ""}>${o ? esc(o.name) : "Not linked to an outcome"}
-      <span class="sub">${o ? `${o.kids.length} capabilit${o.kids.length === 1 ? "y" : "ies"}${imp !== null && imp !== undefined ? ` · impact ${imp}` : ""}${o.row[CFG.O.review] ? " · needs review" : ""}` : "Drag notes here to unlink them"}</span></div>
+      <span class="sub">${o ? `${o.kids.length} capabilit${o.kids.length === 1 ? "y" : "ies"}${imp !== null && imp !== undefined ? ` · impact ${imp}` : ""}` : "Drag notes here to unlink them"}</span></div>
     <div class="lane-body" data-drop="C" data-parent="${id}">${caps.map((c) => capHTML(c, id)).join("")}
       ${addHTML("C", id)}</div></section>`;
 }
@@ -985,6 +978,7 @@ $("#collapseAll").addEventListener("click", () => {
 });
 
 api.ready({ requiredAccess: "full" });
+api.enableKeyboardShortcuts?.(); // Ctrl/Cmd+Z and Ctrl/Cmd+Shift+Z run Grist's undo/redo (not inside text boxes)
 api.onRecords?.(() => refresh()); // fires when the table this widget is bound to changes
 setInterval(() => {
   if (!document.hidden) refresh();

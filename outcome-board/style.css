@@ -10,7 +10,7 @@
   --cap-edge: #e8cf5c;
   --del: #ffffff;
   --select: #2b6cb0;
-  --review: #c63c3c;
+  --danger: #c63c3c;
   --st-none: #9aa7b4;
   --st-progress: #e8962e;
   --st-done: #3a9d6c;
@@ -177,13 +177,6 @@ input {
 .pill.ok {
   background: #cfeedd;
   color: #1d6b45;
-}
-.review {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--review);
-  display: inline-block;
 }
 .copies {
   position: absolute;
@@ -567,7 +560,7 @@ textarea.title:focus {
   color: var(--muted);
 }
 .task.hit {
-  background: var(--cap); /* matches the filter */
+  background: #d6e6f7; /* matches the filter */
 }
 .trash {
   flex: 0 0 18px;
@@ -584,7 +577,7 @@ textarea.title:focus {
   opacity: 1;
 }
 .trash:hover {
-  color: var(--review);
+  color: var(--danger);
 }
 /* Delete: pane footer button and the inline confirmation (pane or task row) */
 .pane-foot {
@@ -596,7 +589,7 @@ textarea.title:focus {
   padding: 0;
   border: none;
   background: none;
-  color: var(--review);
+  color: var(--danger);
   font-size: 13px;
   cursor: pointer;
 }
@@ -621,8 +614,8 @@ textarea.title:focus {
   cursor: pointer;
 }
 .confirm button.danger {
-  background: var(--review);
-  border-color: var(--review);
+  background: var(--danger);
+  border-color: var(--danger);
   color: #fff;
 }
 .task .copies {
