@@ -92,6 +92,7 @@ const ui = {
   busy: false,
   draft: null, // name being typed in place: {type, parent, text} for a new record, plus id to rename a task
   confirm: null, // {type, id} of the item whose delete is waiting for confirmation
+  showAll: false, // pool shows every item, not just unlinked ones ("Hide linked" unticked)
 };
 
 // ---- Data ------------------------------------------------------------------------------------------
@@ -123,7 +124,7 @@ async function load() {
       p.kids.forEach((id) => next[CHILD[k]].get(id).parents.push(p.id));
     }
   }
-  const pos = (x) => x.row.manualSort ?? x.id; // row order in Grist; used for outcome lists and the "Not linked" items
+  const pos = (x) => x.row.manualSort ?? x.id; // row order in Grist; used for outcome lists and the pool
   for (const k in next)
     next[k] = new Map(
       [...next[k].values()]
@@ -167,19 +168,29 @@ async function act(actions, msg) {
 }
 
 const kidsOf = (type, parent) =>
-  // children of a parent; parent 0 = the "not linked" bucket
+  // children of a parent; parent 0 = the pool (unlinked items, or all of them)
   parent
     ? [...S[PARENT[type]].get(parent).kids]
-    : [...S[type].values()].filter((x) => !x.parents.length).map((x) => x.id);
+    : [...S[type].values()]
+        .filter((x) => ui.showAll || !x.parents.length)
+        .map((x) => x.id);
 const setKids = (type, parent, list) => [
   "UpdateRecord",
   CFG[PARENT[type]].table,
   parent,
   { [CFG[PARENT[type]].children]: ["L", ...list] },
 ];
-const nameOf = (type, id) => (id ? S[type].get(id)?.name : "Not linked");
+const nameOf = (type, id) => (id ? S[type].get(id)?.name : "the pool");
+// names of the pool's stand-in notes for deliverables and tasks
+const poolName = (type) =>
+  ui.showAll
+    ? `All ${PLURAL[type]}`
+    : {
+        D: "Deliverables without a capability",
+        T: "Tasks without a deliverable",
+      }[type];
 
-// "Not linked" items have no parent list, so their order is the table's row order (manualSort).
+// Pool items have no parent list, so their order is the table's row order (manualSort).
 function rowOrder(type, id, beforeId) {
   const all = [...S[type].keys()].filter((x) => x !== id),
     loose = kidsOf(type, 0).filter((x) => x !== id);
@@ -223,7 +234,10 @@ function move(type, id, from, to, index, beforeId) {
     }
   }
   if (acts.length)
-    act(acts, `Moved “${nameOf(type, id)}” to “${nameOf(PARENT[type], to)}”.`);
+    act(
+      acts,
+      `${from ? "Moved" : "Linked"} “${nameOf(type, id)}” to “${nameOf(PARENT[type], to)}”.`, // from the pool = a new link
+    );
 }
 
 function link(type, id, to) {
@@ -340,7 +354,7 @@ function confirmHTML({ type, id }) {
   return `<div class="confirm"><span>Delete “${esc(x.name)}”?${where}</span>
     ${
       more
-        ? `<button class="danger" data-go="one" title="What's under it moves to Not linked">Delete only this</button>
+        ? `<button class="danger" data-go="one" title="What's under it moves to the pool">Delete only this</button>
       <button class="danger" data-go="all">Delete with ${more}</button>`
         : `<button class="danger" data-go="all">Delete</button>`
     }
@@ -402,7 +416,7 @@ function capHTML(c, out) {
     ${
       open
         ? `<div class="dels" data-drop="D" data-parent="${special ? 0 : c.id}">${list.map((d) => delHTML(d, special ? 0 : c.id)).join("")}
-      ${orphanT.length && (!filtering || orphanHit) ? `<div class="del orphan${paneIs("D", 0) ? " open" : ""}" tabindex="0" data-type="D" data-id="0" data-parent="0">Tasks without a deliverable (${orphanT.length})</div>` : ""}
+      ${orphanT.length && (!filtering || orphanHit) ? `<div class="del orphan${paneIs("D", 0) ? " open" : ""}" tabindex="0" data-type="D" data-id="0" data-parent="0">${poolName("T")} (${orphanT.length})</div>` : ""}
       ${special ? "" : addHTML("D", c.id)}</div>`
         : ""
     }
@@ -413,11 +427,11 @@ function laneHTML(o) {
   const id = o ? o.id : 0;
   let caps = kidsOf("C", id).map((c) => S.C.get(c));
   if (!o) {
-    // "Not linked" lane: unlinked capabilities + bucket for unlinked deliverables
+    // the pool: capabilities + a stand-in card holding the pool's deliverables
     const orphanD = kidsOf("D", 0);
     caps.push({
       id: 0,
-      name: "Deliverables without a capability",
+      name: poolName("D"),
       kids: orphanD,
       parents: [],
       row: {},
@@ -426,8 +440,8 @@ function laneHTML(o) {
   const imp = o && num(o.row[CFG.O.impact]);
   const open = o && paneIs("O", o.id);
   return `<section class="lane${o ? "" : " unlinked"}">
-    <div class="lane-head${open ? " open" : ""}" tabindex="0" data-type="O" data-id="${id}" data-parent="0"${o ? ' draggable="true" title="Drag to reorder"' : ""}>${o ? esc(o.name) : "Not linked to an outcome"}
-      <span class="sub">${o ? `${o.kids.length} capabilit${o.kids.length === 1 ? "y" : "ies"}${imp !== null && imp !== undefined ? ` · impact ${imp}` : ""}` : "Drag notes here to unlink them"}</span></div>
+    <div class="lane-head${open ? " open" : ""}" tabindex="0" data-type="O" data-id="${id}" data-parent="0"${o ? ' draggable="true" title="Drag to reorder"' : ""}>${o ? esc(o.name) : "Pool"}
+      <span class="sub">${o ? `${o.kids.length} capabilit${o.kids.length === 1 ? "y" : "ies"}${imp !== null && imp !== undefined ? ` · impact ${imp}` : ""}` : `Drag notes here to unlink them <label class="toggle"><input type="checkbox" data-hidelinked${ui.showAll ? "" : " checked"}> Hide linked</label>`}</span></div>
     <div class="lane-body" data-drop="C" data-parent="${id}">${caps.map((c) => capHTML(c, id)).join("")}
       ${addHTML("C", id)}</div></section>`;
 }
@@ -448,6 +462,8 @@ function render() {
     else ui.sel = null;
   }
   renderPane();
+  if (ui.sel && document.activeElement === document.body)
+    findEl(ui.sel)?.focus({ preventScroll: true }); // re-render dropped focus; keep arrow keys working
   const draft = $(".draft");
   if (draft && document.activeElement !== draft) {
     grow(draft);
@@ -464,7 +480,7 @@ function renderPane() {
     : p.type === "D" && p.id === 0
       ? {
           id: 0,
-          name: "Tasks without a deliverable",
+          name: poolName("T"),
           kids: kidsOf("T", 0),
           parents: [],
           row: {},
@@ -554,6 +570,32 @@ const selOf = (el) => ({
   id: +el.dataset.id,
   parent: +(el.dataset.parent || 0),
 });
+
+// Arrow keys: up/down through a list's visible notes (or the side pane's tasks), left/right to the
+// nearest note at the same height in the next list.
+function arrow(key, el) {
+  const notes = (scope) => [...scope.querySelectorAll("[data-type]")];
+  let next;
+  if (key === "ArrowUp" || key === "ArrowDown") {
+    const list = notes(el.closest(".tasks, .lane"));
+    next = list[list.indexOf(el) + (key === "ArrowDown" ? 1 : -1)];
+  } else if (!el.closest("#pane")) {
+    const lanes = [...document.querySelectorAll("#board .lane")].filter(
+        (l) => notes(l).length,
+      ),
+      lane =
+        lanes[
+          lanes.indexOf(el.closest(".lane")) + (key === "ArrowRight" ? 1 : -1)
+        ],
+      y = el.getBoundingClientRect().top,
+      dist = (n) => Math.abs(n.getBoundingClientRect().top - y);
+    next = lane && notes(lane).reduce((a, b) => (dist(b) < dist(a) ? b : a));
+  }
+  if (next) {
+    next.focus();
+    select(next);
+  }
+}
 
 // ---- Interaction -----------------------------------------------------------------------------------
 function select(el) {
@@ -661,6 +703,10 @@ document.addEventListener("change", (e) => {
         ? null
         : +el.value
       : el.value || null;
+  if (el.matches("[data-hidelinked]")) {
+    ui.showAll = !el.checked;
+    return render();
+  }
   if (el.matches("textarea.title") && !el.value.trim()) return renderPane(); // don't allow blank names
   if (el.matches("[data-field]") && ui.pane)
     act([
@@ -789,6 +835,28 @@ document.addEventListener("keydown", (e) => {
     s.parent
   ) {
     unlink(s.type, s.id, s.parent);
+    e.preventDefault();
+  } else if (e.key.startsWith("Arrow")) {
+    const cur = noteOf(e.target) || (ui.sel && findEl(ui.sel));
+    if (cur) arrow(e.key, cur);
+    else {
+      // nothing selected yet: start at the first note
+      const first = $("#board [data-type]");
+      first.focus();
+      select(first);
+    }
+    e.preventDefault();
+  } else if (e.key === " " && e.target.matches("[data-type]")) {
+    // Space: expand/collapse a capability, open/close a deliverable's side pane
+    const s = selOf(e.target);
+    if (s.type === "C") {
+      const k = ekey(s.parent, s.id);
+      ui.expanded.has(k) ? ui.expanded.delete(k) : ui.expanded.add(k);
+    } else if (s.type === "D")
+      ui.pane = paneIs("D", s.id) ? null : { type: "D", id: s.id };
+    else return;
+    select(e.target);
+    render();
     e.preventDefault();
   } else if (e.key === "Escape") {
     select(null);

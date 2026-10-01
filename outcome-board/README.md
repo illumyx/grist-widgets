@@ -10,8 +10,11 @@ and clicking a deliverable opens its task checklist. Every link is many-to-many.
 - × on a note (or the Delete key) removes that one link; the record itself stays.
 - To delete a record, use Delete at the bottom of its side pane (or the trash icon on a task). You can
   also delete what's linked only under it; anything also linked elsewhere is kept.
-- Items in "Not linked to an outcome" can be dragged into any order (saved as the table's row order).
-- "Not linked to an outcome" holds unlinked capabilities and a bucket of deliverables without a capability.
+- The Pool (first list) holds unlinked capabilities, deliverables, and tasks; untick "Hide linked" to see all of them.
+  Dragging from the pool adds a link; dragging into it unlinks. Pool items can be dragged into any order
+  (saved as the table's row order).
+- Keys: arrows move between notes (up/down within a list or the task list, left/right across lists);
+  Space expands a capability or opens/closes a deliverable's side pane; Enter opens the side pane.
 - ×N means the note appears in N places; hovering outlines the other copies.
 - Capabilities have a status (Not Started / In Progress / Available); "Hide done" also hides Available ones.
 - Click an outcome header, capability, or deliverable to open its details in the side pane: status, urgency,
