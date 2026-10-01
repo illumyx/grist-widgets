@@ -581,6 +581,11 @@ textarea.title:focus {
 .sprints .sp {
   max-width: none;
 }
+.sprints textarea.draft {
+  flex: 1;
+  min-width: 10em;
+  width: auto;
+}
 .sprints select {
   font: inherit;
 }

@@ -124,12 +124,17 @@ export function pills(x, removable) {
 }
 
 // Side pane row: the item's sprint pills (own ones removable) and a menu to add it to an open sprint.
+// "New sprint..." swaps the menu for a name box (a draft); saving creates the sprint with the item in it.
 function sprintsHTML(x) {
   const open = [...S.SP.values()].filter(
     (sp) => sp.status !== SPRINT_DONE && !x.own.has(sp.id),
   );
   return `<div class="sprints"><span class="label">Sprints</span>${pills(x, true)}
-    ${open.length ? `<select data-addsprint aria-label="Add to sprint"><option value="">Add to sprint...</option>${open.map((sp) => `<option value="${sp.id}">${esc(sp.name)}</option>`).join("")}</select>` : ""}</div>`;
+    ${
+      ui.draft?.type === "SP"
+        ? draftHTML(LABEL.SP, ui.draft.text)
+        : `<select data-addsprint aria-label="Add to sprint"><option value="">Add to sprint...</option>${open.map((sp) => `<option value="${sp.id}">${esc(sp.name)}</option>`).join("")}<option value="new">New sprint...</option></select>`
+    }</div>`;
 }
 
 function delHTML(d, cap) {
@@ -226,7 +231,7 @@ function renderPane() {
       ${x.parents.length ? `<div class="chips">${x.parents.map((q) => `<span class="chip">${esc(nameOf(PARENT[L], q))}</span>`).join("")}</div>` : ""}
       ${L !== "O" && sum ? `<div class="summary">${sum}</div>` : ""}
       ${x.id && FIELDS[L] ? `<div class="fields">${FIELDS[L].map(field).join("")}</div>` : ""}
-      ${x.id && S.SP.size ? sprintsHTML(x) : ""}
+      ${x.id && S.hasSprints ? sprintsHTML(x) : ""}
       ${note ? `<div class="pane-note">${esc(note)}</div>` : ""}</div>`;
   if (L === "D") {
     const tasks = x.kids.map((t) => S.T.get(t)).filter(visible);
@@ -412,8 +417,20 @@ document.addEventListener("change", (e) => {
         ? null
         : +el.value
       : el.value || null;
-  if (el.matches("[data-addsprint]"))
+  if (el.matches("[data-addsprint]")) {
+    if (el.value === "new") {
+      ui.draft = {
+        type: "SP",
+        text: "",
+        fields: {
+          [CFG.SP.status]: "Planned",
+          [CFG[ui.pane.type].table]: ["L", ui.pane.id],
+        },
+      };
+      return render();
+    }
     return el.value && sprintLink(+el.value, ui.pane.type, ui.pane.id, true);
+  }
   if (el.matches("[data-hidelinked]")) {
     ui.showAll = !el.checked;
     return render();

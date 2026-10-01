@@ -87,6 +87,7 @@ export const LABEL = {
   C: "capability",
   D: "deliverable",
   T: "task",
+  SP: "sprint",
 };
 const PLURAL = {
   O: "outcomes",
@@ -131,7 +132,8 @@ export const ui = {
   pane: null,
   drag: null,
   busy: false,
-  draft: null, // name being typed in place: {type, parent, text} for a new record, plus id to rename a task
+  draft: null, // name being typed in place: {type, parent, text} for a new record (plus fields: extra
+  // columns to set), or with id to rename a task
   confirm: null, // {type, id} of the item whose delete is waiting for confirmation
   showAll: false, // pool shows every item, not just unlinked ones ("Hide linked" unticked)
 };
@@ -172,6 +174,7 @@ async function load() {
         .map((x) => [x.id, x]),
     );
   next.SP = loadSprints(sprints, next);
+  next.hasSprints = !!sprints; // the Sprints table exists (extend_schema.py has run)
   S = next;
 }
 
@@ -358,7 +361,7 @@ export function saveDraft() {
   if (!name || (d.id && name === S.T.get(d.id)?.name)) return render();
   if (d.id)
     return act([["UpdateRecord", CFG.T.table, d.id, { [CFG.T.name]: name }]]);
-  const fields = { [CFG[d.type].name]: name };
+  const fields = { [CFG[d.type].name]: name, ...d.fields };
   if (d.parent) fields[CFG[d.type].parents] = ["L", d.parent];
   act([["AddRecord", CFG[d.type].table, null, fields]], `Added “${name}”.`);
 }
