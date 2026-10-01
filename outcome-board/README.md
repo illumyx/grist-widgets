@@ -24,7 +24,7 @@ and clicking a deliverable opens its task checklist. Every link is many-to-many.
 - Yellow/red banners show Elevated/High urgency; a capability shows the highest urgency among its open deliverables.
 - The filter matches capability, deliverable, and task names; matching tasks are highlighted in the side pane.
 
-Column names are in `CFG` and `FIELDS` at the top of `app.js`. Expects the columns added by `bin/extend_schema.py`.
+Column names are in `CFG` and `FIELDS` at the top of `core.js`. Expects the columns added by `bin/extend_schema.py`.
 
 ## Try it locally
 

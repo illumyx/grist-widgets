@@ -1,0 +1,336 @@
+/* Link board: Outcomes (lists) -> Capabilities (sticky notes) -> Deliverables (small notes) -> Tasks (checklist).
+ * Links are many-to-many. Each link is written on the PARENT side (parent's RefList order = display order);
+ * Grist's two-way references keep the child side in sync.
+ *
+ * core.js: shared data and actions -- column config, loading the four tables, and the user actions that
+ * change them. The current page draws itself through page.render(). */
+
+// ---- Column names: adjust here if you rename things in Grist -------------------------------------
+export const CFG = {
+  O: {
+    table: "Outcomes",
+    name: "Outcome",
+    children: "Capabilities",
+    impact: "Impact",
+  },
+  C: {
+    table: "Capabilities",
+    name: "Capability",
+    children: "Deliverables",
+    parents: "Outcomes",
+    note: "Review_Note",
+    proposed: "Proposed_By",
+    status: "Status",
+  },
+  D: {
+    table: "Deliverables",
+    name: "Deliverable",
+    children: "Tasks",
+    parents: "Capabilities",
+    note: "Review_Note",
+    status: "Status",
+    urgency: "Urgency",
+  },
+  T: {
+    table: "Tasks",
+    name: "Task",
+    parents: "Deliverables",
+    status: "Status",
+    effort: "Effort",
+    urgency: "Urgency",
+  },
+};
+// Capabilities and Deliverables have Impact/Effort (shown), *_Rollup (formula) and *_Estimate (entered).
+// Editable fields in the side pane, per level: [column, label, kind]
+const STATUSES = ["Not Started", "In Progress", "Review", "Done"];
+const CAP_STATUSES = ["Not Started", "In Progress", "Available"]; // "Available" counts as done
+// kind: "number", "urgency", or a list of choices
+export const FIELDS = {
+  O: [["Impact", "Impact", "number"]],
+  C: [
+    ["Status", "Status", CAP_STATUSES],
+    ["Impact_Estimate", "Impact estimate", "number"],
+    ["Effort_Estimate", "Effort estimate", "number"],
+  ],
+  D: [
+    ["Status", "Status", STATUSES],
+    ["Urgency", "Urgency", "urgency"],
+    ["Impact_Estimate", "Impact estimate", "number"],
+    ["Effort_Estimate", "Effort estimate", "number"],
+  ],
+};
+export const URGENCY = ["", "Elevated", "High"]; // blank = normal
+const CHILD = { O: "C", C: "D", D: "T" };
+export const PARENT = { C: "O", D: "C", T: "D" };
+export const LABEL = {
+  O: "outcome",
+  C: "capability",
+  D: "deliverable",
+  T: "task",
+};
+const PLURAL = {
+  O: "outcomes",
+  C: "capabilities",
+  D: "deliverables",
+  T: "tasks",
+};
+export const plural = (n, type) =>
+  `${n} ${n === 1 ? LABEL[type] : PLURAL[type]}`;
+export const DONE = "Done",
+  NOT_STARTED = "Not Started",
+  AVAILABLE = "Available";
+
+const api = window.GRIST_MOCK || grist;
+export const $ = (s, el = document) => el.querySelector(s);
+export const esc = (s) =>
+  String(s ?? "").replace(
+    /[&<>"]/g,
+    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c],
+  );
+const refs = (v) => (Array.isArray(v) ? (v[0] === "L" ? v.slice(1) : v) : []);
+
+export let S = { O: new Map(), C: new Map(), D: new Map(), T: new Map() };
+export const ekey = (out, cap) => `${out}:${cap}`; // expanded state is per copy (outcome:capability)
+export const ui = {
+  expanded: new Set(),
+  sel: null,
+  clip: null,
+  pane: null,
+  drag: null,
+  busy: false,
+  draft: null, // name being typed in place: {type, parent, text} for a new record, plus id to rename a task
+  confirm: null, // {type, id} of the item whose delete is waiting for confirmation
+  showAll: false, // pool shows every item, not just unlinked ones ("Hide linked" unticked)
+};
+
+// ---- Data ------------------------------------------------------------------------------------------
+async function load() {
+  const tabs = await Promise.all(
+    ["O", "C", "D", "T"].map((k) => api.docApi.fetchTable(CFG[k].table)),
+  );
+  const next = {};
+  ["O", "C", "D", "T"].forEach((k, i) => {
+    const t = tabs[i],
+      m = new Map();
+    t.id.forEach((id, r) => {
+      const row = { id };
+      for (const col in t) if (col !== "id") row[col] = t[col][r];
+      m.set(id, {
+        id,
+        row,
+        name: row[CFG[k].name] || "(untitled)",
+        kids: CHILD[k] ? refs(row[CFG[k].children]) : [],
+        parents: [],
+      });
+    });
+    next[k] = m;
+  });
+  for (const k of ["O", "C", "D"]) {
+    // derive parents from parent-side lists, drop dangling refs
+    for (const p of next[k].values()) {
+      p.kids = p.kids.filter((id) => next[CHILD[k]].has(id));
+      p.kids.forEach((id) => next[CHILD[k]].get(id).parents.push(p.id));
+    }
+  }
+  const pos = (x) => x.row.manualSort ?? x.id; // row order in Grist; used for outcome lists and the pool
+  for (const k in next)
+    next[k] = new Map(
+      [...next[k].values()]
+        .sort((a, b) => pos(a) - pos(b))
+        .map((x) => [x.id, x]),
+    );
+  S = next;
+}
+
+async function refresh(force) {
+  // polling skips while you're dragging or typing; our own writes force it
+  if (
+    !force &&
+    (ui.drag ||
+      ui.busy ||
+      document.activeElement?.matches(
+        "input:not([type=checkbox]), select, textarea",
+      ))
+  )
+    return;
+  try {
+    await load();
+    render();
+    $("#status").textContent = "";
+  } catch (e) {
+    $("#status").textContent = "Couldn't read the tables: " + (e.message || e);
+  }
+}
+
+export async function act(actions, msg) {
+  ui.busy = true;
+  try {
+    await api.docApi.applyUserActions(actions);
+    if (msg) toast(msg);
+  } catch (e) {
+    toast("Change failed: " + (e.message || e));
+  } finally {
+    ui.busy = false;
+  }
+  await refresh(true);
+}
+
+export const kidsOf = (type, parent) =>
+  // children of a parent; parent 0 = the pool (unlinked items, or all of them)
+  parent
+    ? [...S[PARENT[type]].get(parent).kids]
+    : [...S[type].values()]
+        .filter((x) => ui.showAll || !x.parents.length)
+        .map((x) => x.id);
+const setKids = (type, parent, list) => [
+  "UpdateRecord",
+  CFG[PARENT[type]].table,
+  parent,
+  { [CFG[PARENT[type]].children]: ["L", ...list] },
+];
+export const nameOf = (type, id) => (id ? S[type].get(id)?.name : "the pool");
+// names of the pool's stand-in notes for deliverables and tasks
+export const poolName = (type) =>
+  ui.showAll
+    ? `All ${PLURAL[type]}`
+    : {
+        D: "Deliverables without a capability",
+        T: "Tasks without a deliverable",
+      }[type];
+
+// Pool items have no parent list, so their order is the table's row order (manualSort).
+function rowOrder(type, id, beforeId) {
+  const all = [...S[type].keys()].filter((x) => x !== id),
+    loose = kidsOf(type, 0).filter((x) => x !== id);
+  let at = all.indexOf(beforeId);
+  if (at < 0)
+    at = loose.length ? all.indexOf(loose[loose.length - 1]) + 1 : all.length;
+  all.splice(at, 0, id);
+  return [
+    "BulkUpdateRecord",
+    CFG[type].table,
+    all,
+    { manualSort: all.map((_, i) => i + 1) },
+  ];
+}
+
+export function move(type, id, from, to, index, beforeId) {
+  const acts = [];
+  if (!to) acts.push(rowOrder(type, id, beforeId));
+  if (from === to) {
+    if (!to) return act(acts);
+    const list = kidsOf(type, to),
+      old = list.indexOf(id);
+    list.splice(old, 1);
+    list.splice(index > old ? index - 1 : index, 0, id);
+    acts.push(setKids(type, to, list));
+  } else {
+    if (from)
+      acts.push(
+        setKids(
+          type,
+          from,
+          kidsOf(type, from).filter((x) => x !== id),
+        ),
+      );
+    if (to) {
+      const list = kidsOf(type, to);
+      if (!list.includes(id)) {
+        list.splice(Math.min(index, list.length), 0, id);
+        acts.push(setKids(type, to, list));
+      }
+    }
+  }
+  if (acts.length)
+    act(
+      acts,
+      `${from ? "Moved" : "Linked"} “${nameOf(type, id)}” to “${nameOf(PARENT[type], to)}”.`, // from the pool = a new link
+    );
+}
+
+export function link(type, id, to) {
+  const list = kidsOf(type, to);
+  if (list.includes(id))
+    return toast(
+      `“${nameOf(type, id)}” is already on “${nameOf(PARENT[type], to)}”.`,
+    );
+  act(
+    [setKids(type, to, [...list, id])],
+    `Linked “${nameOf(type, id)}” to “${nameOf(PARENT[type], to)}”.`,
+  );
+}
+
+export function unlink(type, id, from) {
+  if (!from) return;
+  act(
+    [
+      setKids(
+        type,
+        from,
+        kidsOf(type, from).filter((x) => x !== id),
+      ),
+    ],
+    `Removed “${nameOf(type, id)}” from “${nameOf(PARENT[type], from)}”.`,
+  );
+}
+
+// Save the in-place draft: add the new record, or rename the task. A blank or unchanged name just closes it.
+export function saveDraft() {
+  const d = ui.draft,
+    name = d.text.trim();
+  ui.draft = null;
+  if (!name || (d.id && name === S.T.get(d.id)?.name)) return render();
+  if (d.id)
+    return act([["UpdateRecord", CFG.T.table, d.id, { [CFG.T.name]: name }]]);
+  const fields = { [CFG[d.type].name]: name };
+  if (d.parent) fields[CFG[d.type].parents] = ["L", d.parent];
+  act([["AddRecord", CFG[d.type].table, null, fields]], `Added “${name}”.`);
+}
+
+// Items that would be left with no parent if (type, id) were deleted, per level: {C: [ids], D: [...], ...}.
+// Something also linked to a parent that stays is kept.
+export function below(type, id) {
+  const gone = { [type]: [id] };
+  for (let p = type, k = CHILD[type]; k; p = k, k = CHILD[k])
+    gone[k] = [...S[k].values()]
+      .filter(
+        (x) => x.parents.length && x.parents.every((q) => gone[p].includes(q)),
+      )
+      .map((x) => x.id);
+  return gone;
+}
+
+export function remove({ type, id }, withBelow) {
+  const gone = withBelow ? below(type, id) : { [type]: [id] },
+    n = Object.values(gone).flat().length - 1;
+  ui.confirm = null;
+  act(
+    Object.entries(gone)
+      .filter(([, ids]) => ids.length)
+      .map(([k, ids]) => ["BulkRemoveRecord", CFG[k].table, ids]),
+    `Deleted “${nameOf(type, id)}”${n ? ` and ${n} item${n === 1 ? "" : "s"} below it` : ""}.`,
+  );
+}
+
+export function toast(msg) {
+  const t = $("#toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(toast.h);
+  toast.h = setTimeout(() => t.classList.remove("show"), 3200);
+}
+
+// Each page sets page.render to draw itself; shared code calls render().
+export const page = { render() {} };
+export const render = () => page.render();
+
+// Connect to Grist (or the mock) and keep the data fresh.
+export function start() {
+  api.ready({ requiredAccess: "full" });
+  api.enableKeyboardShortcuts?.(); // Ctrl/Cmd+Z and Ctrl/Cmd+Shift+Z run Grist's undo/redo (not inside text boxes)
+  api.onRecords?.(() => refresh()); // fires when the table this widget is bound to changes
+  setInterval(() => {
+    if (!document.hidden) refresh();
+  }, 5000); // catch edits to the other three tables
+  refresh();
+}
