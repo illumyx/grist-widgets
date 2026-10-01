@@ -293,34 +293,6 @@ input {
   border-left-color: transparent;
 }
 
-/* Toolbar sprint choice: outline what's in it (dashed = inherited from a parent) */
-[data-sc] {
-  outline: 2px solid color-mix(in srgb, var(--sc), #000 30%);
-  outline-offset: 1px;
-}
-[data-sc="via"] {
-  outline-style: dashed;
-}
-.sprint-tools {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-}
-.sprint-tools[hidden] {
-  display: none;
-}
-#paint[aria-pressed="true"] {
-  background: var(--select);
-  border-color: var(--select);
-  color: #fff;
-}
-.toolbar button:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-body.painting [data-type] {
-  cursor: cell;
-}
 .selected {
   outline: 2px solid var(--select);
   outline-offset: 2px;
@@ -548,13 +520,8 @@ textarea.title:focus {
   box-shadow: inset 0 0 0 1.5px var(--sp);
   color: var(--muted);
 }
-.lane-head .sp,
-.task .sp {
+.lane-head .sp {
   margin: 4px 4px 0 0;
-}
-.task .sp {
-  flex: none;
-  margin-top: 1px;
 }
 .sp-x {
   border: none;
@@ -584,6 +551,33 @@ textarea.title:focus {
 }
 .sprints select {
   font: inherit;
+}
+.task {
+  flex-wrap: wrap; /* the sprint menu and pills drop to a second line when the row is full */
+}
+.task .name {
+  flex: 1 1 8em;
+}
+.tsprints {
+  order: 1; /* after the trash button, so that stays on the first line */
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+.task select {
+  flex: none;
+  max-width: 7.5em;
+  font-size: 12px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--muted);
+}
+.task:hover select,
+.task select:focus {
+  border-color: #b8c2cb;
+  background: #fff;
 }
 .tasks {
   flex: 1;

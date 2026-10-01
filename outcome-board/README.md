@@ -25,10 +25,8 @@ and clicking a deliverable opens its task checklist. Every link is many-to-many.
 - The filter matches capability, deliverable, and task names; matching tasks are highlighted in the side pane.
 - Sprints (once `bin/extend_schema.py` has added the Sprints table): colored pills show an item's sprints;
   an outlined pill means it's inherited from a parent (everything under an item in a sprint is in it too).
-  The side pane's Sprints row adds the item to a sprint (or a new one) and x takes it out.
-- Toolbar Sprint menu: outlines what's in the chosen sprint (dashed = inherited); "Hide others" hides the rest.
-  With a single sprint chosen, Paint makes a click add or remove an item (tasks too, in the side pane);
-  Esc stops painting.
+  The side pane's Sprints row adds the item to a sprint (or a new one) and x takes it out; each task row in
+  the side pane has the same menu and pills.
 
 Column names are in `CFG` and `FIELDS` at the top of `core.js`. Expects the columns added by `bin/extend_schema.py`.
 

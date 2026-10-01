@@ -133,12 +133,10 @@ export const ui = {
   drag: null,
   busy: false,
   draft: null, // name being typed in place: {type, parent, text} for a new record (plus fields: extra
-  // columns to set), or with id to rename a task
+  // columns to set; a new sprint also has forType/forId, the item whose menu it replaced), or with id
+  // to rename a task
   confirm: null, // {type, id} of the item whose delete is waiting for confirmation
   showAll: false, // pool shows every item, not just unlinked ones ("Hide linked" unticked)
-  scope: "", // toolbar sprint menu: "" all, "any" in a sprint, "none" not in one, or a sprint id
-  hideOthers: false, // hide items outside the scope
-  paint: false, // paint mode: clicks add/remove items in the scope sprint
 };
 
 // ---- Data ------------------------------------------------------------------------------------------
