@@ -25,6 +25,16 @@
       >
       <button id="expandAll" type="button">Expand all</button>
       <button id="collapseAll" type="button">Collapse all</button>
+      <span id="sprintTools" class="sprint-tools" hidden>
+        <label class="toggle"
+          >Sprint
+          <select id="sprintScope" aria-label="Sprint"></select
+        ></label>
+        <label class="toggle"
+          ><input id="hideOthers" type="checkbox" /> Hide others</label
+        >
+        <button id="paint" type="button" aria-pressed="false">Paint</button>
+      </span>
       <span id="status" class="status" role="status" aria-live="polite"></span>
     </header>
     <main id="board" class="board" tabindex="-1"></main>

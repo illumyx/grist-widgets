@@ -23,6 +23,12 @@ and clicking a deliverable opens its task checklist. Every link is many-to-many.
 - Tasks: tick to mark done, click the small square to cycle urgency (normal / yellow / red), type an effort.
 - Yellow/red banners show Elevated/High urgency; a capability shows the highest urgency among its open deliverables.
 - The filter matches capability, deliverable, and task names; matching tasks are highlighted in the side pane.
+- Sprints (once `bin/extend_schema.py` has added the Sprints table): colored pills show an item's sprints;
+  an outlined pill means it's inherited from a parent (everything under an item in a sprint is in it too).
+  The side pane's Sprints row adds the item to a sprint (or a new one) and x takes it out.
+- Toolbar Sprint menu: outlines what's in the chosen sprint (dashed = inherited); "Hide others" hides the rest.
+  With a single sprint chosen, Paint makes a click add or remove an item (tasks too, in the side pane);
+  Esc stops painting.
 
 Column names are in `CFG` and `FIELDS` at the top of `core.js`. Expects the columns added by `bin/extend_schema.py`.
 

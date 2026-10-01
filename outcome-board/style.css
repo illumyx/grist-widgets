@@ -37,7 +37,8 @@ input {
 
 .toolbar {
   display: flex;
-  gap: 12px;
+  flex-wrap: wrap;
+  gap: 8px 12px;
   align-items: center;
   padding: 8px 12px;
   background: var(--lane);
@@ -292,6 +293,34 @@ input {
   border-left-color: transparent;
 }
 
+/* Toolbar sprint choice: outline what's in it (dashed = inherited from a parent) */
+[data-sc] {
+  outline: 2px solid color-mix(in srgb, var(--sc), #000 30%);
+  outline-offset: 1px;
+}
+[data-sc="via"] {
+  outline-style: dashed;
+}
+.sprint-tools {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.sprint-tools[hidden] {
+  display: none;
+}
+#paint[aria-pressed="true"] {
+  background: var(--select);
+  border-color: var(--select);
+  color: #fff;
+}
+.toolbar button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+body.painting [data-type] {
+  cursor: cell;
+}
 .selected {
   outline: 2px solid var(--select);
   outline-offset: 2px;
@@ -299,40 +328,6 @@ input {
 .twin {
   outline: 2px dashed var(--select);
   outline-offset: 2px;
-}
-.lane-head/* Urgency banners (blank = normal) */
-.cap[data-urgency]::before, .del[data-urgency]::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 5px;
-  border-radius: 2px 2px 0 0;
-}
-.del[data-urgency]::before {
-  left: -4px;
-}
-.cap[data-urgency] {
-  padding-top: 12px;
-}
-.del[data-urgency] {
-  padding-top: 9px;
-}
-[data-urgency="Elevated"]::before {
-  background: #f2c418;
-}
-[data-urgency="High"]::before {
-  background: #d64545;
-}
-.cap.open,
-.lane-head.open {
-  box-shadow: 0 0 0 2px var(--select);
-}
-.del.orphan {
-  font-style: italic;
-  color: var(--muted);
-  border-left-color: transparent;
 }
 
 .selected {
@@ -367,8 +362,9 @@ input {
 .pane[hidden] {
   display: none;
 }
-body.pane-open .board {
-  margin-right: 360px;
+body.pane-open .board,
+body.pane-open .toolbar {
+  margin-right: 360px; /* keep clear of the side pane */
 }
 /* Task pane */
 .pane {

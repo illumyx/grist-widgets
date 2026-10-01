@@ -1,7 +1,15 @@
 /* Outcome Board page: the pool, then one list per outcome. */
 
 import { start, CFG, esc, S, ui, kidsOf, poolName, page, $ } from "./core.js";
-import { addHTML, capHTML, afterRender, num, paneIs, pills } from "./view.js";
+import {
+  addHTML,
+  capHTML,
+  afterRender,
+  num,
+  paneIs,
+  pills,
+  scopeAttr,
+} from "./view.js";
 
 function laneHTML(o) {
   const id = o ? o.id : 0;
@@ -20,7 +28,7 @@ function laneHTML(o) {
   const imp = o && num(o.row[CFG.O.impact]);
   const open = o && paneIs("O", o.id);
   return `<section class="lane${o ? "" : " unlinked"}">
-    <div class="lane-head${open ? " open" : ""}" tabindex="0" data-type="O" data-id="${id}" data-parent="0"${o ? ' draggable="true" title="Drag to reorder"' : ""}>${o ? esc(o.name) : "Pool"}
+    <div class="lane-head${open ? " open" : ""}" tabindex="0" data-type="O" data-id="${id}" data-parent="0"${o ? ` draggable="true" title="Drag to reorder"${scopeAttr(o)}` : ""}>${o ? esc(o.name) : "Pool"}
       <span class="sub">${o ? `${o.kids.length} capabilit${o.kids.length === 1 ? "y" : "ies"}${imp !== null && imp !== undefined ? ` · impact ${imp}` : ""}` : `Drag notes here to unlink them <label class="toggle"><input type="checkbox" data-hidelinked${ui.showAll ? "" : " checked"}> Hide linked</label>`}</span>${o ? pills(o) : ""}</div>
     <div class="lane-body" data-drop="C" data-parent="${id}">${caps.map((c) => capHTML(c, id)).join("")}
       ${addHTML("C", id)}</div></section>`;

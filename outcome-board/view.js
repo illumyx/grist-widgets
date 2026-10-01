@@ -35,7 +35,31 @@ import {
 // ---- Rendering -------------------------------------------------------------------------------------
 const q = () => $("#search").value.trim().toLowerCase();
 const hideDone = () => $("#hideDone").checked;
-const matches = (x) => !q() || x.name.toLowerCase().includes(q());
+const textMatch = (x) => !q() || x.name.toLowerCase().includes(q());
+// Is x inside the toolbar's sprint choice? Only open (not completed) sprints count. The pool's
+// stand-in cards are never in a sprint.
+function inScope(x) {
+  if (!ui.scope) return true;
+  if (!x.own) return false;
+  if (typeof ui.scope === "number")
+    return x.own.has(ui.scope) || x.via.has(ui.scope);
+  const any = [...x.own, ...x.via.keys()].some(
+    (sid) => S.SP.get(sid)?.status !== SPRINT_DONE,
+  );
+  return ui.scope === "any" ? any : !any;
+}
+const filtering = () => !!q() || (ui.hideOthers && !!ui.scope);
+const matches = (x) => textMatch(x) && (!ui.hideOthers || inScope(x));
+// outline for items in the sprint choice: solid if in it directly, dashed if inherited
+export function scopeAttr(x) {
+  if (!ui.scope || !x.own || !inScope(x)) return "";
+  const sp = S.SP.get(ui.scope),
+    own = sp
+      ? x.own.has(sp.id)
+      : ui.scope === "none" ||
+        [...x.own].some((sid) => S.SP.get(sid)?.status !== SPRINT_DONE);
+  return ` data-sc="${own ? "own" : "via"}" style="--sc:${sp ? sp.color : "var(--select)"}"`;
+}
 const doneOf = (x) => (x.row[CFG.D.status] || x.row[CFG.T.status]) === DONE;
 const visible = (x) => !(hideDone() && doneOf(x));
 // true if any shown task (by id) matches the filter; lets a deliverable be found by its tasks
@@ -141,7 +165,7 @@ function delHTML(d, cap) {
   const tasks = d.kids.map((t) => S.T.get(t)),
     done = tasks.filter(doneOf).length;
   const st = d.row[CFG.D.status] || "";
-  return `<div class="del${paneIs("D", d.id) ? " open" : ""}" draggable="true" tabindex="0" data-type="D" data-id="${d.id}" data-parent="${cap}" data-status="${esc(st)}"${urgAttr(d.row[CFG.D.urgency])}>
+  return `<div class="del${paneIs("D", d.id) ? " open" : ""}" draggable="true" tabindex="0" data-type="D" data-id="${d.id}" data-parent="${cap}" data-status="${esc(st)}"${urgAttr(d.row[CFG.D.urgency])}${scopeAttr(d)}>
     ${esc(d.name)}${copies(d, "D")}
     <div class="meta">${tasks.length ? `<span>${done}/${tasks.length} tasks</span>` : ""}${st ? `<span>${esc(st)}</span>` : ""}${pills(d)}</div>${metrics(d)}
     ${cap ? `<button class="x" data-unlink title="Remove from this capability" aria-label="Remove from this capability">×</button>` : ""}</div>`;
@@ -153,17 +177,17 @@ export function capHTML(c, out) {
   const shown = dels.filter(hit);
   const orphanT = special ? kidsOf("T", 0) : [];
   const orphanHit = taskHit(orphanT);
-  const filtering = q() && !matches(c); // card is only here for its matching deliverables/tasks
-  if (filtering && !shown.length && !orphanHit) return "";
+  const filtered = filtering() && !matches(c); // card is only here for its matching deliverables/tasks
+  if (filtered && !shown.length && !orphanHit) return "";
   const cst = special ? "" : c.row[CFG.C.status] || "";
   if (hideDone() && cst === AVAILABLE) return "";
-  const open = ui.expanded.has(ekey(out, c.id)) || !!filtering;
-  const list = filtering ? shown : dels;
+  const open = ui.expanded.has(ekey(out, c.id)) || !!filtered;
+  const list = filtered ? shown : dels;
   const urg = dels
     .filter((d) => !doneOf(d))
     .map((d) => d.row[CFG.D.urgency])
     .sort((x, y) => urgRank(y) - urgRank(x))[0];
-  return `<div class="cap${special ? " special" : ""}${paneIs("C", c.id) && !special ? " open" : ""}" ${special ? "" : 'draggable="true"'} tabindex="0" data-type="C" data-id="${c.id}" data-parent="${out}"${urgAttr(urg)}>
+  return `<div class="cap${special ? " special" : ""}${paneIs("C", c.id) && !special ? " open" : ""}" ${special ? "" : 'draggable="true"'} tabindex="0" data-type="C" data-id="${c.id}" data-parent="${out}"${urgAttr(urg)}${scopeAttr(c)}>
     <div class="cap-title"><button class="chev" data-toggle aria-expanded="${open}" aria-label="${open ? "Collapse" : "Expand"}">${open ? "▾" : "▸"}</button>${esc(c.name)}</div>
     ${special ? "" : copies(c, "C")}
     <div class="meta"><span>${dels.length} deliverable${dels.length === 1 ? "" : "s"}</span>
@@ -174,7 +198,7 @@ export function capHTML(c, out) {
     ${
       open
         ? `<div class="dels" data-drop="D" data-parent="${special ? 0 : c.id}">${list.map((d) => delHTML(d, special ? 0 : c.id)).join("")}
-      ${orphanT.length && (!filtering || orphanHit) ? `<div class="del orphan${paneIs("D", 0) ? " open" : ""}" tabindex="0" data-type="D" data-id="0" data-parent="0">${poolName("T")} (${orphanT.length})</div>` : ""}
+      ${orphanT.length && (!filtered || orphanHit) ? `<div class="del orphan${paneIs("D", 0) ? " open" : ""}" tabindex="0" data-type="D" data-id="0" data-parent="0">${poolName("T")} (${orphanT.length})</div>` : ""}
       ${special ? "" : addHTML("D", c.id)}</div>`
         : ""
     }
@@ -242,7 +266,7 @@ function renderPane() {
             const u = t.row[CFG.T.urgency] || "";
             if (confirming("T", t.id))
               return `<div class="task" data-type="T" data-id="${t.id}" data-parent="${x.id}">${confirmHTML(ui.confirm)}</div>`;
-            return `<div class="task${doneOf(t) ? " done" : ""}${q() && matches(t) ? " hit" : ""}" draggable="true" tabindex="0" data-type="T" data-id="${t.id}" data-parent="${x.id}">
+            return `<div class="task${doneOf(t) ? " done" : ""}${q() && textMatch(t) ? " hit" : ""}" draggable="true" tabindex="0" data-type="T" data-id="${t.id}" data-parent="${x.id}"${scopeAttr(t)}>
         <input type="checkbox" data-check ${doneOf(t) ? "checked" : ""} aria-label="Done">
         ${ui.draft?.id === t.id ? draftHTML(LABEL.T, ui.draft.text) : `<span class="name">${esc(t.name)}</span>`}${pills(t)}
         <button class="urg" data-urg data-u="${esc(u)}" title="Urgency: ${esc(u || "Normal")} (click to change)" aria-label="Urgency: ${esc(u || "Normal")}"></button>
@@ -328,6 +352,18 @@ document.addEventListener("click", (e) => {
     ui.pane = null;
     render();
     return;
+  }
+  if (
+    ui.paint &&
+    note &&
+    +note.dataset.id &&
+    !t.closest("button, input, select, textarea")
+  ) {
+    // paint mode: a click on a note adds it to the scope sprint, or takes it out if it's in it
+    // directly; the note's own buttons and boxes still work
+    const s = selOf(note),
+      x = S[s.type].get(s.id);
+    return sprintLink(ui.scope, s.type, s.id, !x.own.has(ui.scope));
   }
   if (t.closest("[data-delete]")) {
     // a task's trash button, or the pane's Delete button
@@ -586,6 +622,9 @@ document.addEventListener("keydown", (e) => {
     select(e.target);
     render();
     e.preventDefault();
+  } else if (e.key === "Escape" && ui.paint) {
+    ui.paint = false;
+    render();
   } else if (e.key === "Escape") {
     select(null);
     ui.pane = null;
@@ -650,6 +689,7 @@ document.addEventListener("dragstart", (e) => {
   const n = noteOf(e.target);
   if (!n || !n.draggable) return;
   if (document.activeElement?.matches(".draft")) return e.preventDefault(); // selecting text in a draft
+  if (ui.paint) return e.preventDefault();
   ui.drag = selOf(n);
   requestAnimationFrame(autoScroll);
   e.dataTransfer.effectAllowed = "move";
@@ -761,6 +801,7 @@ document.addEventListener("dragend", () => {
 
 // After a page draws its notes: re-mark the selection, draw the side pane, restore focus.
 export function afterRender() {
+  syncSprintTools();
   if (ui.sel) {
     const el = findEl(ui.sel);
     if (el) el.classList.add("selected");
@@ -777,6 +818,34 @@ export function afterRender() {
   }
 }
 
+// Sprint controls: shown once the Sprints table exists; the menu lists open sprints.
+function syncSprintTools() {
+  $("#sprintTools").hidden = !S.hasSprints;
+  const open = [...S.SP.values()].filter((sp) => sp.status !== SPRINT_DONE);
+  if (typeof ui.scope === "number" && !open.some((sp) => sp.id === ui.scope))
+    ui.scope = ""; // that sprint was completed or deleted
+  if (typeof ui.scope !== "number") ui.paint = false;
+  const menu = $("#sprintScope"),
+    opts = [
+      ["", "All"],
+      ["any", "In a sprint"],
+      ["none", "Not in a sprint"],
+      ...open.map((sp) => [sp.id, sp.name]),
+    ]
+      .map(([v, label]) => `<option value="${v}">${esc(label)}</option>`)
+      .join("");
+  if (menu.dataset.opts !== opts) {
+    menu.innerHTML = opts;
+    menu.dataset.opts = opts;
+  }
+  menu.value = String(ui.scope);
+  $("#hideOthers").checked = ui.hideOthers;
+  $("#hideOthers").disabled = !ui.scope;
+  $("#paint").disabled = typeof ui.scope !== "number";
+  $("#paint").setAttribute("aria-pressed", ui.paint);
+  document.body.classList.toggle("painting", ui.paint);
+}
+
 // ---- Toolbar ---------------------------------------------------------------------------------------
 $("#search").addEventListener("input", render);
 $("#hideDone").addEventListener("change", render);
@@ -788,5 +857,18 @@ $("#expandAll").addEventListener("click", () => {
 });
 $("#collapseAll").addEventListener("click", () => {
   ui.expanded.clear();
+  render();
+});
+$("#sprintScope").addEventListener("change", (e) => {
+  const v = e.target.value;
+  ui.scope = /^\d+$/.test(v) ? +v : v;
+  render();
+});
+$("#hideOthers").addEventListener("change", (e) => {
+  ui.hideOthers = e.target.checked;
+  render();
+});
+$("#paint").addEventListener("click", () => {
+  ui.paint = !ui.paint;
   render();
 });
