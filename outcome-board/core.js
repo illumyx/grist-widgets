@@ -39,6 +39,14 @@ export const CFG = {
     effort: "Effort",
     urgency: "Urgency",
   },
+  // Sprints has one link column per item table, named after it (Sprints.Outcomes, ...); each item
+  // table has a Sprints column (two-way). Membership is written on the Sprints side.
+  SP: {
+    table: "Sprints",
+    name: "Sprint",
+    start: "Start",
+    status: "Status",
+  },
 };
 // Capabilities and Deliverables have Impact/Effort (shown), *_Rollup (formula) and *_Estimate (entered).
 // Editable fields in the side pane, per level: [column, label, kind]
@@ -60,6 +68,18 @@ export const FIELDS = {
   ],
 };
 export const URGENCY = ["", "Elevated", "High"]; // blank = normal
+export const SPRINT_DONE = "Completed"; // other sprint statuses: Planned (or blank), Active
+const SPRINT_COLORS = [
+  "#a5c8f0",
+  "#b9e3b0",
+  "#d7b8f0",
+  "#f6c2a0",
+  "#9fe0dc",
+  "#f0b8d8",
+  "#d9e8a0",
+  "#c9ccd1",
+];
+const LEVELS = ["O", "C", "D", "T"];
 const CHILD = { O: "C", C: "D", D: "T" };
 export const PARENT = { C: "O", D: "C", T: "D" };
 export const LABEL = {
@@ -89,7 +109,20 @@ export const esc = (s) =>
   );
 const refs = (v) => (Array.isArray(v) ? (v[0] === "L" ? v.slice(1) : v) : []);
 
-export let S = { O: new Map(), C: new Map(), D: new Map(), T: new Map() };
+export let S = {
+  O: new Map(),
+  C: new Map(),
+  D: new Map(),
+  T: new Map(),
+  SP: new Map(),
+};
+// Grist's column-wise table -> list of row objects
+const rowsOf = (t) =>
+  t.id.map((id, r) => {
+    const row = { id };
+    for (const col in t) if (col !== "id") row[col] = t[col][r];
+    return row;
+  });
 export const ekey = (out, cap) => `${out}:${cap}`; // expanded state is per copy (outcome:capability)
 export const ui = {
   expanded: new Set(),
@@ -105,16 +138,15 @@ export const ui = {
 
 // ---- Data ------------------------------------------------------------------------------------------
 async function load() {
-  const tabs = await Promise.all(
-    ["O", "C", "D", "T"].map((k) => api.docApi.fetchTable(CFG[k].table)),
-  );
+  const [tabs, sprints] = await Promise.all([
+    Promise.all(LEVELS.map((k) => api.docApi.fetchTable(CFG[k].table))),
+    api.docApi.fetchTable(CFG.SP.table).catch(() => null), // no Sprints table yet: no sprints
+  ]);
   const next = {};
-  ["O", "C", "D", "T"].forEach((k, i) => {
-    const t = tabs[i],
-      m = new Map();
-    t.id.forEach((id, r) => {
-      const row = { id };
-      for (const col in t) if (col !== "id") row[col] = t[col][r];
+  LEVELS.forEach((k, i) => {
+    const m = new Map();
+    rowsOf(tabs[i]).forEach((row) => {
+      const id = row.id;
       m.set(id, {
         id,
         row,
@@ -139,7 +171,51 @@ async function load() {
         .sort((a, b) => pos(a) - pos(b))
         .map((x) => [x.id, x]),
     );
+  next.SP = loadSprints(sprints, next);
   S = next;
+}
+
+// Sprints in start-date order. Each item gets own (ids of sprints listing it) and via (sprint id ->
+// {type, item}: the ancestor that is in that sprint, for sprints it only inherits).
+function loadSprints(table, next) {
+  const list = (table ? rowsOf(table) : [])
+    .map((row) => ({
+      id: row.id,
+      row,
+      name: row[CFG.SP.name] || "(untitled)",
+      status: row[CFG.SP.status] || "Planned",
+      color: SPRINT_COLORS[(row.id - 1) % SPRINT_COLORS.length],
+      kids: Object.fromEntries(
+        LEVELS.map((k) => [
+          k,
+          refs(row[CFG[k].table]).filter((id) => next[k].has(id)),
+        ]),
+      ),
+    }))
+    .sort(
+      (a, b) =>
+        (a.row[CFG.SP.start] ?? Infinity) - (b.row[CFG.SP.start] ?? Infinity) ||
+        a.id - b.id,
+    );
+  for (const k of LEVELS)
+    for (const x of next[k].values()) {
+      x.own = new Set();
+      x.via = new Map();
+    }
+  for (const s of list)
+    for (const k in s.kids)
+      s.kids[k].forEach((id) => next[k].get(id).own.add(s.id));
+  for (const k of ["C", "D", "T"])
+    // parents' via is complete before their children's
+    for (const x of next[k].values())
+      for (const pid of x.parents) {
+        const p = next[PARENT[k]].get(pid),
+          add = (sid, src) =>
+            x.own.has(sid) || x.via.has(sid) || x.via.set(sid, src);
+        p.own.forEach((sid) => add(sid, { type: PARENT[k], item: p }));
+        p.via.forEach((src, sid) => add(sid, src));
+      }
+  return new Map(list.map((s) => [s.id, s]));
 }
 
 async function refresh(force) {
@@ -298,6 +374,24 @@ export function below(type, id) {
       )
       .map((x) => x.id);
   return gone;
+}
+
+// Add an item to a sprint, or take it out (explicit membership only).
+export function sprintLink(sid, type, id, add) {
+  const sp = S.SP.get(sid),
+    list = sp.kids[type].filter((x) => x !== id);
+  if (add) list.push(id);
+  act(
+    [
+      [
+        "UpdateRecord",
+        CFG.SP.table,
+        sid,
+        { [CFG[type].table]: ["L", ...list] },
+      ],
+    ],
+    `${add ? "Added" : "Removed"} “${nameOf(type, id)}” ${add ? "to" : "from"} “${sp.name}”.`,
+  );
 }
 
 export function remove({ type, id }, withBelow) {

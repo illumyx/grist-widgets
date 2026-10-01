@@ -2,10 +2,17 @@
  * Uses window.LINKBOARD_DATA if present, otherwise a tiny sample. Changes live in memory only. */
 (function () {
   if (window.top !== window) return; // inside Grist: use the real API
-  const PAIRS = [
+  // two-way links: [parent table, its list column, child table, child's back-reference column]
+  const ALL_PAIRS = [
     ["Outcomes", "Capabilities", "Capabilities", "Outcomes"],
     ["Capabilities", "Deliverables", "Deliverables", "Capabilities"],
     ["Deliverables", "Tasks", "Tasks", "Deliverables"],
+    ...["Outcomes", "Capabilities", "Deliverables", "Tasks"].map((t) => [
+      "Sprints",
+      t,
+      t,
+      "Sprints",
+    ]),
   ];
   const db = window.LINKBOARD_DATA || {
     Outcomes: [
@@ -57,7 +64,36 @@
       { id: 2, Task: "Build page", Status: "Not Started" },
       { id: 3, Task: "Draft copy", Status: "Not Started" },
     ],
+    // Start/End are Grist dates: seconds since 1970 (UTC midnight)
+    Sprints: [
+      {
+        id: 1,
+        Sprint: "Sprint 1",
+        Start: 1789948800,
+        End: 1791158400,
+        Status: "Completed",
+        Deliverables: [3],
+      },
+      {
+        id: 2,
+        Sprint: "Sprint 2",
+        Start: 1791158400,
+        End: 1792368000,
+        Status: "Active",
+        Capabilities: [1],
+        Tasks: [3],
+      },
+      {
+        id: 3,
+        Sprint: "Sprint 3",
+        Start: 1792368000,
+        End: 1793577600,
+        Status: "Planned",
+        Deliverables: [2],
+      },
+    ],
   };
+  const PAIRS = ALL_PAIRS.filter(([pt]) => db[pt]); // custom data may have no Sprints table
   const sync = () =>
     PAIRS.forEach(([pt, pc, ct, cc]) => {
       db[ct].forEach((r) => (r[cc] = []));

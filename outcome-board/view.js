@@ -2,6 +2,8 @@
  * keyboard, and drag and drop. Used by every page. */
 
 import {
+  SPRINT_DONE,
+  sprintLink,
   act,
   move,
   link,
@@ -105,13 +107,38 @@ export function addHTML(type, parent) {
   return `<button class="${type === "O" ? "add-lane" : "add"}" data-add="${type}" data-parent="${parent}">+ Add ${LABEL[type]}</button>`;
 }
 
+// Sprint pills: an item's own sprints, then faded ones it inherits from a parent. Completed
+// sprints aren't shown. With removable, own pills get an x (the side pane).
+export function pills(x, removable) {
+  if (!x.own) return ""; // the pool's stand-in cards
+  const pill = (sid, src) => {
+    const sp = S.SP.get(sid);
+    if (!sp || sp.status === SPRINT_DONE) return "";
+    const why = src ? ` (via ${LABEL[src.type]} “${esc(src.item.name)}”)` : "";
+    return `<span class="sp${src ? " via" : ""}" style="--sp:${sp.color}" title="${esc(sp.name)}${why}">${esc(sp.name)}${removable && !src ? `<button class="sp-x" data-unsprint="${sid}" aria-label="Remove from ${esc(sp.name)}">×</button>` : ""}</span>`;
+  };
+  return (
+    [...x.own].map((sid) => pill(sid)).join("") +
+    [...x.via].map(([sid, src]) => pill(sid, src)).join("")
+  );
+}
+
+// Side pane row: the item's sprint pills (own ones removable) and a menu to add it to an open sprint.
+function sprintsHTML(x) {
+  const open = [...S.SP.values()].filter(
+    (sp) => sp.status !== SPRINT_DONE && !x.own.has(sp.id),
+  );
+  return `<div class="sprints"><span class="label">Sprints</span>${pills(x, true)}
+    ${open.length ? `<select data-addsprint aria-label="Add to sprint"><option value="">Add to sprint...</option>${open.map((sp) => `<option value="${sp.id}">${esc(sp.name)}</option>`).join("")}</select>` : ""}</div>`;
+}
+
 function delHTML(d, cap) {
   const tasks = d.kids.map((t) => S.T.get(t)),
     done = tasks.filter(doneOf).length;
   const st = d.row[CFG.D.status] || "";
   return `<div class="del${paneIs("D", d.id) ? " open" : ""}" draggable="true" tabindex="0" data-type="D" data-id="${d.id}" data-parent="${cap}" data-status="${esc(st)}"${urgAttr(d.row[CFG.D.urgency])}>
     ${esc(d.name)}${copies(d, "D")}
-    <div class="meta">${tasks.length ? `<span>${done}/${tasks.length} tasks</span>` : ""}${st ? `<span>${esc(st)}</span>` : ""}</div>${metrics(d)}
+    <div class="meta">${tasks.length ? `<span>${done}/${tasks.length} tasks</span>` : ""}${st ? `<span>${esc(st)}</span>` : ""}${pills(d)}</div>${metrics(d)}
     ${cap ? `<button class="x" data-unlink title="Remove from this capability" aria-label="Remove from this capability">×</button>` : ""}</div>`;
 }
 
@@ -137,7 +164,7 @@ export function capHTML(c, out) {
     <div class="meta"><span>${dels.length} deliverable${dels.length === 1 ? "" : "s"}</span>
 
       ${cst ? `<span class="pill${cst === AVAILABLE ? " ok" : ""}">${cst === AVAILABLE ? "✓ " : ""}${esc(cst)}</span>` : ""}
-      ${c.row?.[CFG.C.proposed] ? `<span class="pill">${esc(c.row[CFG.C.proposed])}</span>` : ""}</div>
+      ${c.row?.[CFG.C.proposed] ? `<span class="pill">${esc(c.row[CFG.C.proposed])}</span>` : ""}${pills(c)}</div>
     ${special ? "" : metrics(c)}
     ${
       open
@@ -199,6 +226,7 @@ function renderPane() {
       ${x.parents.length ? `<div class="chips">${x.parents.map((q) => `<span class="chip">${esc(nameOf(PARENT[L], q))}</span>`).join("")}</div>` : ""}
       ${L !== "O" && sum ? `<div class="summary">${sum}</div>` : ""}
       ${x.id && FIELDS[L] ? `<div class="fields">${FIELDS[L].map(field).join("")}</div>` : ""}
+      ${x.id && S.SP.size ? sprintsHTML(x) : ""}
       ${note ? `<div class="pane-note">${esc(note)}</div>` : ""}</div>`;
   if (L === "D") {
     const tasks = x.kids.map((t) => S.T.get(t)).filter(visible);
@@ -211,7 +239,7 @@ function renderPane() {
               return `<div class="task" data-type="T" data-id="${t.id}" data-parent="${x.id}">${confirmHTML(ui.confirm)}</div>`;
             return `<div class="task${doneOf(t) ? " done" : ""}${q() && matches(t) ? " hit" : ""}" draggable="true" tabindex="0" data-type="T" data-id="${t.id}" data-parent="${x.id}">
         <input type="checkbox" data-check ${doneOf(t) ? "checked" : ""} aria-label="Done">
-        ${ui.draft?.id === t.id ? draftHTML(LABEL.T, ui.draft.text) : `<span class="name">${esc(t.name)}</span>`}
+        ${ui.draft?.id === t.id ? draftHTML(LABEL.T, ui.draft.text) : `<span class="name">${esc(t.name)}</span>`}${pills(t)}
         <button class="urg" data-urg data-u="${esc(u)}" title="Urgency: ${esc(u || "Normal")} (click to change)" aria-label="Urgency: ${esc(u || "Normal")}"></button>
         <input class="teff" type="number" step="any" data-teffort value="${esc(num(t.row[CFG.T.effort]) ?? "")}" placeholder="effort" aria-label="Effort">
         <button class="trash" data-delete title="Delete task" aria-label="Delete task">${TRASH}</button>
@@ -321,6 +349,13 @@ document.addEventListener("click", (e) => {
       ],
     ]);
   }
+  if (t.closest("[data-unsprint]"))
+    return sprintLink(
+      +t.closest("[data-unsprint]").dataset.unsprint,
+      ui.pane.type,
+      ui.pane.id,
+      false,
+    );
   if (t.closest(".pane-head, .teff")) return;
   if (t.closest(".draft")) return;
   if (t.closest("[data-add]")) {
@@ -377,6 +412,8 @@ document.addEventListener("change", (e) => {
         ? null
         : +el.value
       : el.value || null;
+  if (el.matches("[data-addsprint]"))
+    return el.value && sprintLink(+el.value, ui.pane.type, ui.pane.id, true);
   if (el.matches("[data-hidelinked]")) {
     ui.showAll = !el.checked;
     return render();

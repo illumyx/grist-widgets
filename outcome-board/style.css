@@ -532,6 +532,58 @@ textarea.title:focus {
   padding: 1px 6px;
   border-radius: 3px;
 }
+/* Sprint pills: one color per sprint; outlined = inherited from a parent */
+.sp {
+  display: inline-block;
+  max-width: 10em;
+  padding: 0 6px;
+  border-radius: 8px;
+  background: var(--sp);
+  color: var(--ink);
+  font-size: 11px;
+  line-height: 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+}
+.sp.via {
+  background: none;
+  box-shadow: inset 0 0 0 1.5px var(--sp);
+  color: var(--muted);
+}
+.lane-head .sp,
+.task .sp {
+  margin: 4px 4px 0 0;
+}
+.task .sp {
+  flex: none;
+  margin-top: 1px;
+}
+.sp-x {
+  border: none;
+  background: none;
+  padding: 0 0 0 4px;
+  color: inherit;
+  cursor: pointer;
+}
+.sprints {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin-top: 8px;
+  font-size: 12px;
+}
+.sprints .label {
+  color: var(--muted);
+}
+.sprints .sp {
+  max-width: none;
+}
+.sprints select {
+  font: inherit;
+}
 .tasks {
   flex: 1;
   overflow-y: auto;
