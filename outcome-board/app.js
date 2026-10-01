@@ -546,7 +546,12 @@ function renderPane() {
   }
   if (x.id)
     html += `<div class="pane-foot">${confirming(L, x.id) ? confirmHTML(ui.confirm) : `<button class="danger-link" data-delete>Delete ${LABEL[L]}</button>`}</div>`;
+  // keep the task list's scroll position when redrawing the same item (refreshes, edits)
+  const key = `${L}:${x.id}`,
+    top = pane.dataset.key === key ? $(".tasks", pane)?.scrollTop : 0;
   pane.innerHTML = html;
+  pane.dataset.key = key;
+  if ($(".tasks", pane)) $(".tasks", pane).scrollTop = top || 0;
   const title = $("textarea.title", pane);
   if (title) grow(title);
 }
