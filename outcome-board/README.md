@@ -23,6 +23,7 @@ and clicking a deliverable opens its task checklist. Every link is many-to-many.
 - Tasks: tick to mark done, click the small square to cycle urgency (normal / yellow / red), type an effort.
 - Yellow/red banners show Elevated/High urgency; a capability shows the highest urgency among its open deliverables.
 - The filter matches capability, deliverable, and task names; matching tasks are highlighted in the side pane.
+- The pool stays in place while the other lists scroll sideways; "Hide pool" hides it (on both pages).
 - Sprints (once `bin/extend_schema.py` has added the Sprints table): colored pills show an item's sprints;
   an outlined pill means it's inherited from a parent (everything under an item in a sprint is in it too).
   The side pane's Sprints row adds the item to a sprint (or a new one) and x takes it out; each task row in

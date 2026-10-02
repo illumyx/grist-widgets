@@ -36,6 +36,7 @@ import {
 // ---- Rendering -------------------------------------------------------------------------------------
 const q = () => $("#search").value.trim().toLowerCase();
 const hideDone = () => $("#hideDone").checked;
+const hidePool = () => $("#hidePool").checked;
 export const matches = (x) => !q() || x.name.toLowerCase().includes(q());
 export const doneOf = (x) =>
   (x.row[CFG.D.status] || x.row[CFG.T.status]) === DONE;
@@ -680,7 +681,8 @@ document.addEventListener("dragstart", (e) => {
   const n = noteOf(e.target);
   if (!n || !n.draggable) return;
   if (document.activeElement?.matches(".draft")) return e.preventDefault(); // selecting text in a draft
-  ui.drag = { ...selOf(n), el: n }; // el: where the drag started (pages can look at its context)
+  // el: where the drag started (pages can look at its context); lane: a list header (reorders lists)
+  ui.drag = { ...selOf(n), el: n, lane: n.matches(".lane-head") };
   requestAnimationFrame(autoScroll);
   e.dataTransfer.effectAllowed = "move";
   e.dataTransfer.setData("text/plain", n.dataset.id);
@@ -708,7 +710,7 @@ function laneSlot(e) {
 
 document.addEventListener("dragover", (e) => {
   pointer = { x: e.clientX, y: e.clientY, el: e.target };
-  if (LANES.includes(ui.drag?.type)) {
+  if (ui.drag?.lane) {
     if (!e.target.closest("#board")) return;
     e.preventDefault();
     clearDrop();
@@ -759,7 +761,7 @@ document.addEventListener("dragover", (e) => {
 });
 
 document.addEventListener("drop", (e) => {
-  if (LANES.includes(ui.drag?.type)) {
+  if (ui.drag?.lane) {
     e.preventDefault();
     const { before, order } = laneSlot(e),
       { id, type } = ui.drag;
@@ -823,6 +825,7 @@ document.addEventListener("dragend", () => {
 // The pool list: capabilities, then a stand-in card holding the pool's deliverables (and, under it,
 // its tasks). note: the hint under the title; extra: more header checkboxes.
 export function poolHTML(note, extra = "") {
+  if (hidePool()) return "";
   const caps = kidsOf("C", 0).map((c) => S.C.get(c));
   caps.push({
     id: 0,
@@ -872,6 +875,7 @@ function afterRender() {
 // ---- Toolbar ---------------------------------------------------------------------------------------
 $("#search").addEventListener("input", render);
 $("#hideDone").addEventListener("change", render);
+$("#hidePool").addEventListener("change", render);
 $("#expandAll").addEventListener("click", () => {
   document
     .querySelectorAll("#board .cap")

@@ -47,12 +47,12 @@ const day = (sec) =>
   });
 
 const outcomeHTML = (o, sp) =>
-  `<div class="ocard${paneIs("O", o.id) ? " open" : ""}" tabindex="0" data-type="O" data-id="${o.id}" data-parent="${sp.id}">${esc(o.name)}
+  `<div class="ocard${paneIs("O", o.id) ? " open" : ""}" draggable="true" tabindex="0" data-type="O" data-id="${o.id}" data-parent="${sp.id}">${esc(o.name)}
     <div class="meta"><span>${plural(o.kids.length, "C")}</span></div>${xButton}</div>`;
 
 // a task added to the sprint on its own: a small row (click opens its deliverable)
 const taskHTML = (t, sp) =>
-  `<div class="trow${doneOf(t) ? " done" : ""}" tabindex="0" data-type="T" data-id="${t.id}" data-parent="${sp.id}">
+  `<div class="trow${doneOf(t) ? " done" : ""}" draggable="true" tabindex="0" data-type="T" data-id="${t.id}" data-parent="${sp.id}">
     <input type="checkbox" data-check${doneOf(t) ? " checked" : ""} aria-label="Done"><span class="name">${esc(t.name)}</span>${xButton}</div>`;
 
 function sprintHTML(sp) {

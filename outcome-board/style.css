@@ -90,6 +90,13 @@ input {
 .lane.unlinked {
   background: #e4e8ec;
   border: 2px dashed #b8c2cb;
+  position: sticky; /* the pool stays put while the other lists scroll sideways */
+  left: 0;
+  z-index: 1;
+  align-self: stretch; /* full height, so nothing shows under it */
+  box-shadow:
+    -12px 0 0 var(--board),
+    6px 0 8px -6px rgba(0, 0, 0, 0.3); /* the first covers the board's left margin */
 }
 .lane-head {
   padding: 10px 12px 8px;
@@ -113,6 +120,9 @@ input {
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+.lane-body > * {
+  flex-shrink: 0; /* a long list scrolls; its notes never squash (and overlap) */
 }
 .add {
   border: none;
