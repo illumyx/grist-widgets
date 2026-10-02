@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Sprints</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&display=swap"
+    />
+    <link rel="stylesheet" href="style.css" />
+    <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+  </head>
+  <body>
+    <header class="toolbar">
+      <input
+        id="search"
+        type="search"
+        placeholder="Filter notes"
+        aria-label="Filter notes"
+      />
+      <label class="toggle"
+        ><input id="hideDone" type="checkbox" /> Hide done</label
+      >
+      <button id="expandAll" type="button">Expand all</button>
+      <button id="collapseAll" type="button">Collapse all</button>
+      <label class="toggle"
+        ><input id="showCompleted" type="checkbox" /> Show completed</label
+      >
+      <span id="status" class="status" role="status" aria-live="polite"></span>
+    </header>
+    <main id="board" class="board" tabindex="-1"></main>
+    <aside id="pane" class="pane" hidden></aside>
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <script src="mock.js"></script>
+    <script type="module" src="sprints.js"></script>
+  </body>
+</html>

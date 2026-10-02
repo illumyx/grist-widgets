@@ -30,18 +30,20 @@ import {
   NOT_STARTED,
   AVAILABLE,
   $,
+  page,
 } from "./core.js";
 
 // ---- Rendering -------------------------------------------------------------------------------------
 const q = () => $("#search").value.trim().toLowerCase();
 const hideDone = () => $("#hideDone").checked;
-const matches = (x) => !q() || x.name.toLowerCase().includes(q());
-const doneOf = (x) => (x.row[CFG.D.status] || x.row[CFG.T.status]) === DONE;
-const visible = (x) => !(hideDone() && doneOf(x));
+export const matches = (x) => !q() || x.name.toLowerCase().includes(q());
+export const doneOf = (x) =>
+  (x.row[CFG.D.status] || x.row[CFG.T.status]) === DONE;
+export const visible = (x) => !(hideDone() && doneOf(x));
 // true if any shown task (by id) matches the filter; lets a deliverable be found by its tasks
 const taskHit = (ids) =>
   ids.some((t) => visible(S.T.get(t)) && matches(S.T.get(t)));
-const hit = (d) => matches(d) || taskHit(d.kids);
+export const hit = (d) => matches(d) || taskHit(d.kids);
 const copies = (x, level) =>
   x.parents.length > 1
     ? `<span class="copies" title="On ${plural(x.parents.length, PARENT[level])}">×${x.parents.length}</span>`
@@ -100,11 +102,12 @@ export function addHTML(type, parent) {
     const box = draftHTML(LABEL[type], d.text);
     return {
       O: `<section class="lane"><div class="lane-head">${box}</div></section>`,
+      SP: `<section class="lane"><div class="lane-head">${box}</div></section>`,
       C: `<div class="cap">${box}</div>`,
       D: `<div class="del">${box}</div>`,
     }[type];
   }
-  return `<button class="${type === "O" ? "add-lane" : "add"}" data-add="${type}" data-parent="${parent}">+ Add ${LABEL[type]}</button>`;
+  return `<button class="${LANES.includes(type) ? "add-lane" : "add"}" data-add="${type}" data-parent="${parent}">+ Add ${LABEL[type]}</button>`;
 }
 
 // Sprint pills: an item's own sprints, then faded ones it inherits from a parent. Completed
@@ -145,7 +148,7 @@ const sprintTarget = (el) => {
 const sprintsHTML = (type, x) =>
   `<div class="sprints"><span class="label">Sprints</span>${pills(x, true)}${sprintMenu(type, x)}</div>`;
 
-function delHTML(d, cap) {
+export function delHTML(d, cap) {
   const tasks = d.kids.map((t) => S.T.get(t)),
     done = tasks.filter(doneOf).length;
   const st = d.row[CFG.D.status] || "";
@@ -217,6 +220,11 @@ function renderPane() {
     let input;
     if (kind === "number")
       input = `<input type="number" step="any" data-field="${col}" value="${esc(v)}">`;
+    else if (kind === "date")
+      // Grist dates are seconds since 1970 (UTC midnight)
+      input = `<input type="date" data-field="${col}" value="${v === "" ? "" : new Date(v * 1000).toISOString().slice(0, 10)}">`;
+    else if (kind === "text")
+      input = `<input type="text" data-field="${col}" value="${esc(v)}">`;
     else {
       const list = Array.isArray(kind),
         opts = list
@@ -239,7 +247,7 @@ function renderPane() {
       ${x.parents.length ? `<div class="chips">${x.parents.map((q) => `<span class="chip">${esc(nameOf(PARENT[L], q))}</span>`).join("")}</div>` : ""}
       ${L !== "O" && sum ? `<div class="summary">${sum}</div>` : ""}
       ${x.id && FIELDS[L] ? `<div class="fields">${FIELDS[L].map(field).join("")}</div>` : ""}
-      ${x.id && S.hasSprints ? sprintsHTML(L, x) : ""}
+      ${x.id && S.hasSprints && L !== "SP" ? sprintsHTML(L, x) : ""}
       ${note ? `<div class="pane-note">${esc(note)}</div>` : ""}</div>`;
   if (L === "D") {
     const tasks = x.kids.map((t) => S.T.get(t)).filter(visible);
@@ -413,6 +421,13 @@ document.addEventListener("click", (e) => {
       ui.pane = { type: s.type, id: s.id };
       ui.confirm = null;
       render();
+    } else if (s.type === "T" && !note.closest("#pane")) {
+      // a task listed on the page (not in the side pane): open its deliverable
+      const d = S.T.get(s.id).parents[0];
+      if (d) {
+        ui.pane = { type: "D", id: d };
+        render();
+      }
     }
   } else if (t.closest("#board")) select(null);
 });
@@ -420,11 +435,13 @@ document.addEventListener("click", (e) => {
 document.addEventListener("change", (e) => {
   const el = e.target;
   const val = () =>
-    el.type === "number"
-      ? el.value === ""
-        ? null
-        : +el.value
-      : el.value || null;
+    el.value === ""
+      ? null
+      : el.type === "number"
+        ? +el.value
+        : el.type === "date"
+          ? Date.parse(el.value) / 1000 // "YYYY-MM-DD" parses as UTC midnight, as Grist stores it
+          : el.value;
   if (el.matches("[data-addsprint]")) {
     const [type, id] = sprintTarget(el);
     if (el.value === "new") {
@@ -658,6 +675,8 @@ document.addEventListener("dragstart", (e) => {
   const n = noteOf(e.target);
   if (!n || !n.draggable) return;
   if (document.activeElement?.matches(".draft")) return e.preventDefault(); // selecting text in a draft
+  if (!page.itemDrag && !LANES.includes(n.dataset.type))
+    return e.preventDefault();
   ui.drag = selOf(n);
   requestAnimationFrame(autoScroll);
   e.dataTransfer.effectAllowed = "move";
@@ -665,10 +684,14 @@ document.addEventListener("dragstart", (e) => {
   requestAnimationFrame(() => n.classList.add("dragging"));
 });
 
-// Outcome lists reorder left/right; order is saved in the Outcomes table's row order (manualSort).
+// Lists (outcomes on the board, sprints on the sprints page) reorder left/right; the order is saved
+// in their table's row order (manualSort).
+const LANES = ["O", "SP"];
 function laneSlot(e) {
   const lanes = [...document.querySelectorAll("#board .lane")].filter(
-    (l) => +$(".lane-head", l).dataset.id,
+    (l) =>
+      +$(".lane-head", l).dataset.id &&
+      $(".lane-head", l).dataset.type === ui.drag.type,
   );
   const others = lanes.filter(
     (l) => +$(".lane-head", l).dataset.id !== ui.drag.id,
@@ -682,7 +705,7 @@ function laneSlot(e) {
 
 document.addEventListener("dragover", (e) => {
   pointer = { x: e.clientX, y: e.clientY, el: e.target };
-  if (ui.drag?.type === "O") {
+  if (LANES.includes(ui.drag?.type)) {
     if (!e.target.closest("#board")) return;
     e.preventDefault();
     clearDrop();
@@ -717,10 +740,10 @@ document.addEventListener("dragover", (e) => {
 });
 
 document.addEventListener("drop", (e) => {
-  if (ui.drag?.type === "O") {
+  if (LANES.includes(ui.drag?.type)) {
     e.preventDefault();
     const { before, order } = laneSlot(e),
-      id = ui.drag.id;
+      { id, type } = ui.drag;
     const at = before
       ? order.indexOf(+$(".lane-head", before).dataset.id)
       : order.length;
@@ -730,7 +753,7 @@ document.addEventListener("drop", (e) => {
     act([
       [
         "BulkUpdateRecord",
-        CFG.O.table,
+        CFG[type].table,
         order,
         { manualSort: order.map((_, i) => i + 1) },
       ],
@@ -767,8 +790,21 @@ document.addEventListener("dragend", () => {
     .forEach((x) => x.classList.remove("dragging"));
 });
 
+// Draw a page's lists into #board, keeping each list's and the board's scroll position.
+export function drawBoard(html) {
+  const board = $("#board"),
+    scroll = [...board.querySelectorAll(".lane-body")].map((e) => e.scrollTop),
+    left = board.scrollLeft;
+  board.innerHTML = html;
+  board
+    .querySelectorAll(".lane-body")
+    .forEach((e, i) => (e.scrollTop = scroll[i] || 0));
+  board.scrollLeft = left;
+  afterRender();
+}
+
 // After a page draws its notes: re-mark the selection, draw the side pane, restore focus.
-export function afterRender() {
+function afterRender() {
   if (ui.sel) {
     const el = findEl(ui.sel);
     if (el) el.classList.add("selected");

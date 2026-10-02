@@ -45,6 +45,7 @@ export const CFG = {
     table: "Sprints",
     name: "Sprint",
     start: "Start",
+    end: "End",
     status: "Status",
   },
 };
@@ -52,7 +53,8 @@ export const CFG = {
 // Editable fields in the side pane, per level: [column, label, kind]
 const STATUSES = ["Not Started", "In Progress", "Review", "Done"];
 const CAP_STATUSES = ["Not Started", "In Progress", "Available"]; // "Available" counts as done
-// kind: "number", "urgency", or a list of choices
+const SPRINT_STATUSES = ["Planned", "Active", "Completed"];
+// kind: "number", "urgency", "date", "text", or a list of choices
 export const FIELDS = {
   O: [["Impact", "Impact", "number"]],
   C: [
@@ -65,6 +67,12 @@ export const FIELDS = {
     ["Urgency", "Urgency", "urgency"],
     ["Impact_Estimate", "Impact estimate", "number"],
     ["Effort_Estimate", "Effort estimate", "number"],
+  ],
+  SP: [
+    ["Status", "Status", SPRINT_STATUSES],
+    ["Start", "Start", "date"],
+    ["End", "End", "date"],
+    ["Notes", "Notes", "text"],
   ],
 };
 export const URGENCY = ["", "Elevated", "High"]; // blank = normal
@@ -188,6 +196,7 @@ function loadSprints(table, next) {
       row,
       name: row[CFG.SP.name] || "(untitled)",
       status: row[CFG.SP.status] || "Planned",
+      parents: [], // sprints sit at the top, like outcomes
       color: SPRINT_COLORS[(row.id - 1) % SPRINT_COLORS.length],
       kids: Object.fromEntries(
         LEVELS.map((k) => [
@@ -196,11 +205,15 @@ function loadSprints(table, next) {
         ]),
       ),
     }))
-    .sort(
-      (a, b) =>
-        (a.row[CFG.SP.start] ?? Infinity) - (b.row[CFG.SP.start] ?? Infinity) ||
-        a.id - b.id,
-    );
+    .sort((a, b) => a.id - b.id);
+  // Start-date order until the sprints have been put in some other order by hand (dragging their
+  // headers, or reordering rows in Grist): then row order (manualSort) wins.
+  const pos = (s) => s.row.manualSort ?? s.id,
+    byHand = list.some((s, i) => i && pos(s) < pos(list[i - 1])),
+    start = (s) => s.row[CFG.SP.start] ?? Infinity;
+  list.sort((a, b) =>
+    byHand ? pos(a) - pos(b) : start(a) - start(b) || a.id - b.id,
+  );
   for (const k of LEVELS)
     for (const x of next[k].values()) {
       x.own = new Set();
@@ -419,7 +432,7 @@ export function toast(msg) {
 }
 
 // Each page sets page.render to draw itself; shared code calls render().
-export const page = { render() {} };
+export const page = { render() {}, itemDrag: true }; // itemDrag false: only lists can be dragged
 export const render = () => page.render();
 
 // Connect to Grist (or the mock) and keep the data fresh.

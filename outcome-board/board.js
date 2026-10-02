@@ -1,7 +1,7 @@
 /* Outcome Board page: the pool, then one list per outcome. */
 
-import { start, CFG, esc, S, ui, kidsOf, poolName, page, $ } from "./core.js";
-import { addHTML, capHTML, afterRender, num, paneIs, pills } from "./view.js";
+import { start, CFG, esc, S, ui, kidsOf, poolName, page } from "./core.js";
+import { addHTML, capHTML, drawBoard, num, paneIs, pills } from "./view.js";
 
 function laneHTML(o) {
   const id = o ? o.id : 0;
@@ -26,17 +26,9 @@ function laneHTML(o) {
       ${addHTML("C", id)}</div></section>`;
 }
 
-page.render = () => {
-  const board = $("#board"),
-    scroll = [...board.querySelectorAll(".lane-body")].map((e) => e.scrollTop),
-    left = board.scrollLeft;
-  board.innerHTML =
-    laneHTML(null) + [...S.O.values()].map(laneHTML).join("") + addHTML("O", 0);
-  board
-    .querySelectorAll(".lane-body")
-    .forEach((e, i) => (e.scrollTop = scroll[i] || 0));
-  board.scrollLeft = left;
-  afterRender();
-};
+page.render = () =>
+  drawBoard(
+    laneHTML(null) + [...S.O.values()].map(laneHTML).join("") + addHTML("O", 0),
+  );
 
 start();

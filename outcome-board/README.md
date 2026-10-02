@@ -37,6 +37,15 @@ Column names are in `CFG` and `FIELDS` at the top of `core.js`. Expects the colu
 Open http://localhost:8000 for a demo with sample data (changes stay in the browser).
 To run it against the real doc, use http://localhost:8000/index.html as the widget URL below.
 
+## Sprints page (`sprints.html`)
+
+One list per sprint: Planned and Active (tick "Show completed" for the rest), in start-date order until you drag
+a sprint's header to reorder. Each list holds what was added to that sprint (outcomes, capabilities,
+deliverables, and tasks as small rows), laid out like the board's pool; whatever is under an item comes with it.
+The header shows status, dates, and how many of the sprint's tasks are done. Click it to edit the sprint
+(name, status, dates, notes) or delete it (its items are kept). "+ Add sprint" adds one.
+
 ## Add it in Grist
 
 Add widget to page -> Custom -> enter the widget URL -> select data: Outcomes -> access: Full document.
+For the sprints page, add another Custom widget with `.../sprints.html` as the URL and Sprints as its data.
