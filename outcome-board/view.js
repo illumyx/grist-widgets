@@ -148,17 +148,17 @@ const sprintTarget = (el) => {
 const sprintsHTML = (type, x) =>
   `<div class="sprints"><span class="label">Sprints</span>${pills(x, true)}${sprintMenu(type, x)}</div>`;
 
-export function delHTML(d, cap) {
+export function delHTML(d, cap, xTitle = "Remove from this capability") {
   const tasks = d.kids.map((t) => S.T.get(t)),
     done = tasks.filter(doneOf).length;
   const st = d.row[CFG.D.status] || "";
   return `<div class="del${paneIs("D", d.id) ? " open" : ""}" draggable="true" tabindex="0" data-type="D" data-id="${d.id}" data-parent="${cap}" data-status="${esc(st)}"${urgAttr(d.row[CFG.D.urgency])}>
     ${esc(d.name)}${copies(d, "D")}
     <div class="meta">${tasks.length ? `<span>${done}/${tasks.length} tasks</span>` : ""}${st ? `<span>${esc(st)}</span>` : ""}${pills(d)}</div>${metrics(d)}
-    ${cap ? `<button class="x" data-unlink title="Remove from this capability" aria-label="Remove from this capability">×</button>` : ""}</div>`;
+    ${cap ? `<button class="x" data-unlink title="${xTitle}" aria-label="${xTitle}">×</button>` : ""}</div>`;
 }
 
-export function capHTML(c, out) {
+export function capHTML(c, out, xTitle = "Remove from this outcome") {
   const special = c.id === 0;
   const dels = c.kids.map((d) => S.D.get(d)).filter(visible);
   const shown = dels.filter(hit);
@@ -189,7 +189,7 @@ export function capHTML(c, out) {
       ${special ? "" : addHTML("D", c.id)}</div>`
         : ""
     }
-    ${out && !special ? `<button class="x" data-unlink title="Remove from this outcome" aria-label="Remove from this outcome">×</button>` : ""}</div>`;
+    ${out && !special ? `<button class="x" data-unlink title="${xTitle}" aria-label="${xTitle}">×</button>` : ""}</div>`;
 }
 
 function renderPane() {
@@ -397,7 +397,7 @@ document.addEventListener("click", (e) => {
   }
   if (t.closest("[data-unlink]")) {
     const s = selOf(note);
-    return unlink(s.type, s.id, s.parent);
+    return page.unlink ? page.unlink(s, note) : unlink(s.type, s.id, s.parent);
   }
   if (t.matches("[data-check]")) {
     const id = +note.dataset.id,
@@ -455,6 +455,10 @@ document.addEventListener("change", (e) => {
       return render();
     }
     return el.value && sprintLink(+el.value, type, id, true);
+  }
+  if (el.matches("[data-hideplanned]")) {
+    ui.hidePlanned = el.checked;
+    return render();
   }
   if (el.matches("[data-hidelinked]")) {
     ui.showAll = !el.checked;
@@ -568,6 +572,8 @@ document.addEventListener("keydown", (e) => {
     );
     e.preventDefault();
   } else if (mod && e.key === "v" && ui.clip) {
+    e.preventDefault();
+    if (page.paste?.(ui.clip, s && findEl(s))) return;
     const c = ui.clip,
       want = PARENT[c.type];
     let target = null;
@@ -580,14 +586,13 @@ document.addEventListener("keydown", (e) => {
         `Select ${{ O: "an outcome list", C: "a capability", D: "a deliverable" }[want]} to paste into.`,
       );
     link(c.type, c.id, target);
-    e.preventDefault();
   } else if (
     (e.key === "Delete" || e.key === "Backspace") &&
     s &&
     s.type !== "O" &&
     s.parent
   ) {
-    unlink(s.type, s.id, s.parent);
+    page.unlink ? page.unlink(s, findEl(s)) : unlink(s.type, s.id, s.parent);
     e.preventDefault();
   } else if (e.key.startsWith("Arrow")) {
     const cur = noteOf(e.target) || (ui.sel && findEl(ui.sel));
@@ -675,9 +680,7 @@ document.addEventListener("dragstart", (e) => {
   const n = noteOf(e.target);
   if (!n || !n.draggable) return;
   if (document.activeElement?.matches(".draft")) return e.preventDefault(); // selecting text in a draft
-  if (!page.itemDrag && !LANES.includes(n.dataset.type))
-    return e.preventDefault();
-  ui.drag = selOf(n);
+  ui.drag = { ...selOf(n), el: n }; // el: where the drag started (pages can look at its context)
   requestAnimationFrame(autoScroll);
   e.dataTransfer.effectAllowed = "move";
   e.dataTransfer.setData("text/plain", n.dataset.id);
@@ -713,6 +716,16 @@ document.addEventListener("dragover", (e) => {
     marker = document.createElement("div");
     marker.className = "lane-marker";
     $("#board").insertBefore(marker, before || $("#board .add-lane"));
+    return;
+  }
+  if (page.dropTarget) {
+    // this page decides where items can land (the sprints page)
+    const t = page.dropTarget(e);
+    clearDrop();
+    if (t) {
+      e.preventDefault();
+      t.el.classList.add("drop-into");
+    }
     return;
   }
   const t = dropTarget(e);
@@ -760,6 +773,17 @@ document.addEventListener("drop", (e) => {
     ]);
     return;
   }
+  if (page.dropTarget) {
+    const t = page.dropTarget(e),
+      d = ui.drag;
+    clearDrop();
+    ui.drag = null;
+    if (t && d) {
+      e.preventDefault();
+      page.drop(d, t);
+    }
+    return;
+  }
   const t = dropTarget(e),
     d = ui.drag;
   if (!t || !d) return;
@@ -789,6 +813,24 @@ document.addEventListener("dragend", () => {
     .querySelectorAll(".dragging")
     .forEach((x) => x.classList.remove("dragging"));
 });
+
+// The pool list: capabilities, then a stand-in card holding the pool's deliverables (and, under it,
+// its tasks). note: the hint under the title; extra: more header checkboxes.
+export function poolHTML(note, extra = "") {
+  const caps = kidsOf("C", 0).map((c) => S.C.get(c));
+  caps.push({
+    id: 0,
+    name: poolName("D"),
+    kids: kidsOf("D", 0),
+    parents: [],
+    row: {},
+  });
+  return `<section class="lane unlinked">
+    <div class="lane-head" tabindex="0" data-type="O" data-id="0" data-parent="0">Pool
+      <span class="sub">${note} <label class="toggle"><input type="checkbox" data-hidelinked${ui.showAll ? "" : " checked"}> Hide linked</label>${extra}</span></div>
+    <div class="lane-body" data-drop="C" data-parent="0">${caps.map((c) => capHTML(c, 0)).join("")}
+      ${addHTML("C", 0)}</div></section>`;
+}
 
 // Draw a page's lists into #board, keeping each list's and the board's scroll position.
 export function drawBoard(html) {

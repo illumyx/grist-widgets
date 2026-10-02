@@ -39,11 +39,17 @@ To run it against the real doc, use http://localhost:8000/index.html as the widg
 
 ## Sprints page (`sprints.html`)
 
-One list per sprint: Planned and Active (tick "Show completed" for the rest), in start-date order until you drag
-a sprint's header to reorder. Each list holds what was added to that sprint (outcomes, capabilities,
-deliverables, and tasks as small rows), laid out like the board's pool; whatever is under an item comes with it.
+The pool, then one list per sprint: Planned and Active (tick "Show completed" for the rest), in start-date order
+until you drag a sprint's header to reorder. Each list holds what was added to that sprint (outcomes, capabilities,
+deliverables, and tasks as small rows), laid out like the pool; whatever is under an item comes with it.
 The header shows status, dates, and how many of the sprint's tasks are done. Click it to edit the sprint
 (name, status, dates, notes) or delete it (its items are kept). "+ Add sprint" adds one.
+
+- The pool starts with every item; "Hide planned" leaves out items already in a planned or active sprint.
+- Drag from the pool into a sprint to add an item; from one sprint to another to move it; back to the pool to
+  take it out. Tasks can be dragged from the side pane.
+- x (or Delete) on an item in a sprint takes it out. Items that are only there through a parent have no x.
+- Ctrl/Cmd+C an item, select a sprint, Ctrl/Cmd+V adds it.
 
 ## Add it in Grist
 

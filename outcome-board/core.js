@@ -145,6 +145,7 @@ export const ui = {
   // to rename a task
   confirm: null, // {type, id} of the item whose delete is waiting for confirmation
   showAll: false, // pool shows every item, not just unlinked ones ("Hide linked" unticked)
+  hidePlanned: false, // pool leaves out items already in a planned or active sprint (sprints page)
 };
 
 // ---- Data ------------------------------------------------------------------------------------------
@@ -274,7 +275,13 @@ export const kidsOf = (type, parent) =>
     ? [...S[PARENT[type]].get(parent).kids]
     : [...S[type].values()]
         .filter((x) => ui.showAll || !x.parents.length)
+        .filter((x) => !(ui.hidePlanned && planned(x)))
         .map((x) => x.id);
+// in a sprint that isn't completed, directly or through a parent
+const planned = (x) =>
+  [...x.own, ...x.via.keys()].some(
+    (sid) => S.SP.get(sid)?.status !== SPRINT_DONE,
+  );
 const setKids = (type, parent, list) => [
   "UpdateRecord",
   CFG[PARENT[type]].table,
@@ -394,20 +401,25 @@ export function below(type, id) {
 }
 
 // Add an item to a sprint, or take it out (explicit membership only).
-export function sprintLink(sid, type, id, add) {
-  const sp = S.SP.get(sid),
-    list = sp.kids[type].filter((x) => x !== id);
-  if (add) list.push(id);
+// With from (a sprint id), the item is also taken out of that sprint: a move.
+export function sprintLink(sid, type, id, add, from) {
+  const update = (sid, add) => {
+    const list = S.SP.get(sid).kids[type].filter((x) => x !== id);
+    if (add) list.push(id);
+    return [
+      "UpdateRecord",
+      CFG.SP.table,
+      sid,
+      { [CFG[type].table]: ["L", ...list] },
+    ];
+  };
+  const name = nameOf(type, id),
+    to = S.SP.get(sid).name;
   act(
-    [
-      [
-        "UpdateRecord",
-        CFG.SP.table,
-        sid,
-        { [CFG[type].table]: ["L", ...list] },
-      ],
-    ],
-    `${add ? "Added" : "Removed"} “${nameOf(type, id)}” ${add ? "to" : "from"} “${sp.name}”.`,
+    from ? [update(from, false), update(sid, true)] : [update(sid, add)],
+    from
+      ? `Moved “${name}” to “${to}”.`
+      : `${add ? "Added" : "Removed"} “${name}” ${add ? "to" : "from"} “${to}”.`,
   );
 }
 
@@ -431,8 +443,15 @@ export function toast(msg) {
   toast.h = setTimeout(() => t.classList.remove("show"), 3200);
 }
 
-// Each page sets page.render to draw itself; shared code calls render().
-export const page = { render() {}, itemDrag: true }; // itemDrag false: only lists can be dragged
+// Each page sets page.render to draw itself; shared code calls render(). A page can also take over
+// drops, unlinking (x / Delete), and pasting: see the sprints page.
+export const page = {
+  render() {},
+  dropTarget: null, // (event) -> where a drag would land, or null
+  drop: null, // (drag, target)
+  unlink: null, // (sel, note element)
+  paste: null, // (clip, selected element) -> true if handled
+};
 export const render = () => page.render();
 
 // Connect to Grist (or the mock) and keep the data fresh.

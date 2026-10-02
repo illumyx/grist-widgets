@@ -1,15 +1,22 @@
-/* Sprints page: one list per sprint (start-date order until reordered by hand), each holding the
- * outcomes, capabilities, deliverables, and tasks added to that sprint, laid out like the board's
- * pool. Anything under an item comes with it, so it shows inside that item rather than again. */
+/* Sprints page: the pool, then one list per sprint (start-date order until reordered by hand), each
+ * holding the outcomes, capabilities, deliverables, and tasks added to that sprint, laid out like the
+ * pool. Anything under an item comes with it, so it shows inside that item rather than again.
+ * Drag from the pool (or another sprint) into a sprint to add (move) an item; x, Delete, or dragging
+ * back to the pool takes it out; Ctrl/Cmd+V on a selected sprint adds the copied item. */
 
 import {
   start,
   S,
   CFG,
+  ui,
   page,
   render,
   esc,
   plural,
+  nameOf,
+  sprintLink,
+  unlink,
+  toast,
   SPRINT_DONE,
   $,
 } from "./core.js";
@@ -23,10 +30,13 @@ import {
   visible,
   matches,
   hit,
+  poolHTML,
 } from "./view.js";
 
-page.itemDrag = false; // only the sprint lists themselves can be dragged (to reorder) for now
+ui.showAll = true; // the pool starts with every item ("Hide linked" unticked)
 let showCompleted = false;
+const X = "Remove from this sprint",
+  xButton = `<button class="x" data-unlink title="${X}" aria-label="${X}">×</button>`;
 
 const day = (sec) =>
   new Date(sec * 1000).toLocaleDateString(undefined, {
@@ -37,12 +47,12 @@ const day = (sec) =>
 
 const outcomeHTML = (o, sp) =>
   `<div class="ocard${paneIs("O", o.id) ? " open" : ""}" tabindex="0" data-type="O" data-id="${o.id}" data-parent="${sp.id}">${esc(o.name)}
-    <div class="meta"><span>${plural(o.kids.length, "C")}</span></div></div>`;
+    <div class="meta"><span>${plural(o.kids.length, "C")}</span></div>${xButton}</div>`;
 
 // a task added to the sprint on its own: a small row (click opens its deliverable)
 const taskHTML = (t, sp) =>
   `<div class="trow${doneOf(t) ? " done" : ""}" tabindex="0" data-type="T" data-id="${t.id}" data-parent="${sp.id}">
-    <input type="checkbox" data-check${doneOf(t) ? " checked" : ""} aria-label="Done"><span class="name">${esc(t.name)}</span></div>`;
+    <input type="checkbox" data-check${doneOf(t) ? " checked" : ""} aria-label="Done"><span class="name">${esc(t.name)}</span>${xButton}</div>`;
 
 function sprintHTML(sp) {
   const k = sp.kids,
@@ -62,9 +72,9 @@ function sprintHTML(sp) {
         .filter(matches)
         .map((o) => outcomeHTML(o, sp))
         .join("") +
-      k.C.map((id) => capHTML(S.C.get(id), sp.id)).join("") +
+      k.C.map((id) => capHTML(S.C.get(id), sp.id, X)).join("") +
       (dels.length
-        ? `<div class="dels">${dels.map((d) => delHTML(d, 0)).join("")}</div>`
+        ? `<div class="dels">${dels.map((d) => delHTML(d, sp.id, X)).join("")}</div>`
         : "") +
       k.T.map((id) => S.T.get(id))
         .filter(visible)
@@ -85,12 +95,50 @@ function sprintHTML(sp) {
 page.render = () =>
   drawBoard(
     S.hasSprints
-      ? [...S.SP.values()]
-          .filter((sp) => showCompleted || sp.status !== SPRINT_DONE)
-          .map(sprintHTML)
-          .join("") + addHTML("SP", 0)
+      ? poolHTML(
+          "Drag notes here to take them out of a sprint",
+          ` <label class="toggle"><input type="checkbox" data-hideplanned${ui.hidePlanned ? " checked" : ""}> Hide planned</label>`,
+        ) +
+          [...S.SP.values()]
+            .filter((sp) => showCompleted || sp.status !== SPRINT_DONE)
+            .map(sprintHTML)
+            .join("") +
+          addHTML("SP", 0)
       : `<div class="empty">No Sprints table yet: run bin/extend_schema.py.</div>`,
   );
+
+// the sprint a note sits in on this page (0: the pool, or the side pane)
+const sprintOf = (el) => {
+  const lane = el?.closest(".lane.sprint");
+  return lane ? +$(".lane-head", lane).dataset.id : 0;
+};
+const directlyIn = (sid, type, id) => !!S.SP.get(sid)?.kids[type].includes(id);
+
+page.dropTarget = (e) => {
+  const lane = e.target.closest("#board .lane");
+  return lane && { el: lane, sprint: sprintOf(lane) };
+};
+page.drop = (d, t) => {
+  const from = sprintOf(d.el),
+    move = directlyIn(from, d.type, d.id) ? from : undefined;
+  if (t.sprint && t.sprint !== from)
+    sprintLink(t.sprint, d.type, d.id, true, move);
+  else if (!t.sprint && move) sprintLink(from, d.type, d.id, false); // back to the pool
+};
+page.unlink = (s, note) => {
+  const sid = sprintOf(note);
+  if (!sid) return unlink(s.type, s.id, s.parent); // e.g. a task in the side pane
+  if (directlyIn(sid, s.type, s.id))
+    return sprintLink(sid, s.type, s.id, false);
+  toast(
+    `“${nameOf(s.type, s.id)}” is in “${S.SP.get(sid).name}” through a parent; take that out instead.`,
+  );
+};
+page.paste = (clip, el) => {
+  const sid = sprintOf(el);
+  if (sid) sprintLink(sid, clip.type, clip.id, true);
+  return !!sid;
+};
 
 $("#showCompleted").addEventListener("change", (e) => {
   showCompleted = e.target.checked;
