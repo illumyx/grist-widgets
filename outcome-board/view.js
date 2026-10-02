@@ -725,6 +725,12 @@ document.addEventListener("dragover", (e) => {
     if (t) {
       e.preventDefault();
       t.el.classList.add("drop-into");
+      if (t.zone) {
+        // where in the list it will land
+        marker = document.createElement("div");
+        marker.className = "drop-marker";
+        t.zone.insertBefore(marker, t.ref);
+      }
     }
     return;
   }

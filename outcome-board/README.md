@@ -47,7 +47,8 @@ The header shows status, dates, and how many of the sprint's tasks are done. Cli
 
 - The pool starts with every item; "Hide planned" leaves out items already in a planned or active sprint.
 - Drag from the pool into a sprint to add an item; from one sprint to another to move it; back to the pool to
-  take it out. Tasks can be dragged from the side pane.
+  take it out. Tasks can be dragged from the side pane. Within a sprint, drag an item up or down to reorder it
+  among the others of its kind (outcomes, capabilities, deliverables, tasks stay in that order).
 - x (or Delete) on an item in a sprint takes it out. Items that are only there through a parent have no x.
 - Ctrl/Cmd+C an item, select a sprint, Ctrl/Cmd+V adds it.
 

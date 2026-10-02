@@ -401,11 +401,14 @@ export function below(type, id) {
 }
 
 // Add an item to a sprint, or take it out (explicit membership only).
-// With from (a sprint id), the item is also taken out of that sprint: a move.
-export function sprintLink(sid, type, id, add, from) {
+// Options: from (a sprint id): also take the item out of that sprint (a move); before (an item id):
+// place it before that item in its group instead of at the end (adding an item that's already in the
+// sprint just moves it there).
+export function sprintLink(sid, type, id, add, { from, before } = {}) {
   const update = (sid, add) => {
-    const list = S.SP.get(sid).kids[type].filter((x) => x !== id);
-    if (add) list.push(id);
+    const list = S.SP.get(sid).kids[type].filter((x) => x !== id),
+      at = list.indexOf(before);
+    if (add) at < 0 ? list.push(id) : list.splice(at, 0, id);
     return [
       "UpdateRecord",
       CFG.SP.table,
@@ -414,12 +417,15 @@ export function sprintLink(sid, type, id, add, from) {
     ];
   };
   const name = nameOf(type, id),
-    to = S.SP.get(sid).name;
+    to = S.SP.get(sid).name,
+    within = add && S.SP.get(sid).kids[type].includes(id);
   act(
     from ? [update(from, false), update(sid, true)] : [update(sid, add)],
     from
       ? `Moved “${name}” to “${to}”.`
-      : `${add ? "Added" : "Removed"} “${name}” ${add ? "to" : "from"} “${to}”.`,
+      : within
+        ? `Moved “${name}” within “${to}”.`
+        : `${add ? "Added" : "Removed"} “${name}” ${add ? "to" : "from"} “${to}”.`,
   );
 }
 

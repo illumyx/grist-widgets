@@ -1,8 +1,9 @@
 /* Sprints page: the pool, then one list per sprint (start-date order until reordered by hand), each
  * holding the outcomes, capabilities, deliverables, and tasks added to that sprint, laid out like the
  * pool. Anything under an item comes with it, so it shows inside that item rather than again.
- * Drag from the pool (or another sprint) into a sprint to add (move) an item; x, Delete, or dragging
- * back to the pool takes it out; Ctrl/Cmd+V on a selected sprint adds the copied item. */
+ * Drag from the pool (or another sprint) into a sprint to add (move) an item, or within a sprint to
+ * reorder it in its group; x, Delete, or dragging back to the pool takes it out; Ctrl/Cmd+V on a
+ * selected sprint adds the copied item. */
 
 import {
   start,
@@ -114,16 +115,47 @@ const sprintOf = (el) => {
 };
 const directlyIn = (sid, type, id) => !!S.SP.get(sid)?.kids[type].includes(id);
 
+// a sprint list's notes of one level, in order (its own items, not ones inside a capability)
+const GROUP = {
+  O: ":scope > .ocard",
+  C: ":scope > .cap",
+  D: ":scope > .dels > .del",
+  T: ":scope > .trow",
+};
 page.dropTarget = (e) => {
   const lane = e.target.closest("#board .lane");
-  return lane && { el: lane, sprint: sprintOf(lane) };
+  if (!lane || !ui.drag) return null; // (ui.drag is null for drags from outside the page)
+  const t = { el: lane, sprint: sprintOf(lane) },
+    items = t.sprint
+      ? [...$(".lane-body", lane).querySelectorAll(GROUP[ui.drag.type])].filter(
+          (x) => !x.classList.contains("dragging"),
+        )
+      : [];
+  if (!items.length) return t; // pool, or the group is empty: it goes at the end
+  const before = items.find((x) => {
+    const r = x.getBoundingClientRect();
+    return e.clientY < r.top + r.height / 2;
+  });
+  const last = items[items.length - 1];
+  return {
+    ...t,
+    before: before && +before.dataset.id,
+    zone: (before || last).parentElement,
+    ref: before || last.nextSibling,
+  };
 };
 page.drop = (d, t) => {
   const from = sprintOf(d.el),
-    move = directlyIn(from, d.type, d.id) ? from : undefined;
-  if (t.sprint && t.sprint !== from)
-    sprintLink(t.sprint, d.type, d.id, true, move);
-  else if (!t.sprint && move) sprintLink(from, d.type, d.id, false); // back to the pool
+    direct = directlyIn(from, d.type, d.id);
+  if (t.sprint === from) {
+    // reorder within the sprint (inherited items have no place of their own to move)
+    if (direct) sprintLink(from, d.type, d.id, true, { before: t.before });
+  } else if (t.sprint)
+    sprintLink(t.sprint, d.type, d.id, true, {
+      from: direct ? from : undefined,
+      before: t.before,
+    });
+  else if (direct) sprintLink(from, d.type, d.id, false); // back to the pool
 };
 page.unlink = (s, note) => {
   const sid = sprintOf(note);
