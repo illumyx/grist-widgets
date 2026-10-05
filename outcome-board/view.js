@@ -38,8 +38,9 @@ const q = () => $("#search").value.trim().toLowerCase();
 const hideDone = () => $("#hideDone").checked;
 const hidePool = () => $("#hidePool").checked;
 export const matches = (x) => !q() || x.name.toLowerCase().includes(q());
+// (a capability is done when it's "Available"; outcomes have no status)
 export const doneOf = (x) =>
-  (x.row[CFG.D.status] || x.row[CFG.T.status]) === DONE;
+  [DONE, AVAILABLE].includes(x.row[CFG.D.status] || x.row[CFG.T.status]);
 export const visible = (x) => !(hideDone() && doneOf(x));
 // true if any shown task (by id) matches the filter; lets a deliverable be found by its tasks
 const taskHit = (ids) =>
@@ -649,6 +650,18 @@ function dropTarget(e) {
   return null;
 }
 
+// Where a drag would land (find: dropTarget or the page's). Just below a list or card, e.g. under
+// its last note or in the gap before the next card, still counts as in it.
+const FUZZ = 24; // px
+function landing(e, find) {
+  const t = find(e);
+  if (t) return t;
+  const above = document.elementFromPoint(e.clientX, e.clientY - FUZZ);
+  return (
+    above && find({ target: above, clientX: e.clientX, clientY: e.clientY })
+  );
+}
+
 // While dragging, scroll the board (left/right) or the list under the pointer (up/down)
 // when the pointer is near its edge; faster the closer to the edge.
 const EDGE = 50, // px from the edge where scrolling starts
@@ -722,7 +735,7 @@ document.addEventListener("dragover", (e) => {
   }
   if (page.dropTarget) {
     // this page decides where items can land (the sprints page)
-    const t = page.dropTarget(e);
+    const t = landing(e, page.dropTarget);
     clearDrop();
     if (t) {
       e.preventDefault();
@@ -736,7 +749,7 @@ document.addEventListener("dragover", (e) => {
     }
     return;
   }
-  const t = dropTarget(e);
+  const t = landing(e, dropTarget);
   clearDrop();
   if (!t) return;
   e.preventDefault();
@@ -782,7 +795,7 @@ document.addEventListener("drop", (e) => {
     return;
   }
   if (page.dropTarget) {
-    const t = page.dropTarget(e),
+    const t = landing(e, page.dropTarget),
       d = ui.drag;
     clearDrop();
     ui.drag = null;
@@ -792,7 +805,7 @@ document.addEventListener("drop", (e) => {
     }
     return;
   }
-  const t = dropTarget(e),
+  const t = landing(e, dropTarget),
     d = ui.drag;
   if (!t || !d) return;
   e.preventDefault();

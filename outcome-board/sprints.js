@@ -57,10 +57,11 @@ const taskHTML = (t, sp) =>
 
 function sprintHTML(sp) {
   const k = sp.kids,
-    tasks = [...S.T.values()].filter(
-      (t) => t.own.has(sp.id) || t.via.has(sp.id),
+    // what's in the sprint, on its own or through a parent (outcomes have no status to count)
+    items = ["C", "D", "T"].flatMap((type) =>
+      [...S[type].values()].filter((x) => x.own.has(sp.id) || x.via.has(sp.id)),
     ),
-    done = tasks.filter(doneOf).length,
+    done = items.filter(doneOf).length,
     dates = [sp.row[CFG.SP.start], sp.row[CFG.SP.end]]
       .filter(Boolean)
       .map(day)
@@ -85,7 +86,7 @@ function sprintHTML(sp) {
   const sub = [
     sp.status,
     dates,
-    tasks.length ? `${done}/${tasks.length} tasks done` : "",
+    items.length ? `${done}/${items.length} items done` : "",
   ].filter(Boolean);
   return `<section class="lane sprint" style="--sp:${sp.color}">
     <div class="lane-head${paneIs("SP", sp.id) ? " open" : ""}" tabindex="0" data-type="SP" data-id="${sp.id}" data-parent="0" draggable="true" title="Drag to reorder">${esc(sp.name)}
