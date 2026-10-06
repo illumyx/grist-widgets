@@ -3,7 +3,7 @@
  * pool. Anything under an item comes with it, so it shows inside that item rather than again.
  * Drag from the pool (or another sprint) into a sprint to add (move) an item, or within a sprint to
  * reorder it in its group; x, Delete, or dragging back to the pool takes it out; Ctrl/Cmd+V on a
- * selected sprint adds the copied item. */
+ * selected sprint adds the copied item. "+ Add item" adds a new item (no parent) to a sprint. */
 
 import {
   start,
@@ -19,6 +19,9 @@ import {
   unlink,
   toast,
   SPRINT_DONE,
+  TYPES,
+  act,
+  addAction,
   $,
 } from "./core.js";
 import {
@@ -46,6 +49,40 @@ const day = (sec) =>
     day: "numeric",
     timeZone: "UTC",
   });
+
+// "+ Add item": a name box with a chip per level. Enter adds the item to the sprint and leaves the box
+// open for the next one; Esc closes it, and so does clicking away (adding what was typed).
+let adding = null, // {sprint, text}: the sprint whose box is open
+  addType = "T", // the level last picked
+  drawing = false; // redrawing (which takes the focus out of the box)
+const TYPE_KEYS = { KeyO: "O", KeyC: "C", KeyD: "D", KeyT: "T" }; // Alt+O/C/D/T picks the level
+
+function addItemHTML(sp) {
+  if (adding?.sprint !== sp.id)
+    return `<button class="add" data-additem="${sp.id}">+ Add item</button>`;
+  const chips = Object.entries(TYPES)
+    .map(
+      ([k, name]) =>
+        `<button type="button" class="type-chip" tabindex="-1" data-addtype="${k}" aria-pressed="${k === addType}">${name}</button>`,
+    )
+    .join("");
+  return `<form class="additem"><div class="type-chips">${chips}</div>
+    <input type="text" value="${esc(adding.text)}" placeholder="Name, then Enter" title="Alt+O/C/D/T picks the type" aria-label="New item"></form>`;
+}
+function addItem({ sprint, text }) {
+  const name = text.trim();
+  if (!name) return;
+  act(
+    [addAction(addType, name, 0, { [CFG.I.sprints]: ["L", sprint] })],
+    `Added “${name}” to “${S.SP.get(sprint).name}”.`,
+  );
+}
+function pickType(k) {
+  addType = k;
+  document
+    .querySelectorAll("[data-addtype]")
+    .forEach((b) => b.setAttribute("aria-pressed", b.dataset.addtype === k));
+}
 
 const outcomeHTML = (o, sp) =>
   `<div class="ocard${paneIs("O", o.id) ? " open" : ""}" draggable="true" tabindex="0" data-type="O" data-id="${o.id}" data-parent="${sp.id}">${esc(o.name)}
@@ -94,10 +131,11 @@ function sprintHTML(sp) {
   return `<section class="lane sprint" style="--sp:${sp.color}">
     <div class="lane-head${paneIs("SP", sp.id) ? " open" : ""}" tabindex="0" data-type="SP" data-id="${sp.id}" data-parent="0" draggable="true" title="Drag to reorder">${esc(sp.name)}
       <span class="sub">${sub.map(esc).join(" · ")}</span>${progress}</div>
-    <div class="lane-body">${body || `<div class="empty">Nothing in this sprint yet.</div>`}</div></section>`;
+    <div class="lane-body">${body || `<div class="empty">Nothing in this sprint yet.</div>`}${addItemHTML(sp)}</div></section>`;
 }
 
-page.render = () =>
+page.render = () => {
+  drawing = true;
   drawBoard(
     S.hasSprints
       ? poolHTML(
@@ -111,6 +149,14 @@ page.render = () =>
           addHTML("SP", 0)
       : `<div class="empty">No Sprints table yet: run bin/extend_schema.py.</div>`,
   );
+  drawing = false;
+  // keep typing in the add box across redraws
+  const box = $(".additem input");
+  if (box && document.activeElement !== box) {
+    box.focus();
+    box.setSelectionRange(box.value.length, box.value.length);
+  }
+};
 
 // the sprint a note sits in on this page (0: the pool, or the side pane)
 const sprintOf = (el) => {
@@ -175,6 +221,53 @@ page.paste = (clip, el) => {
   if (sid) sprintLink(sid, clip.type, clip.id, true);
   return !!sid;
 };
+
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-additem]");
+  if (!b) return;
+  adding = { sprint: +b.dataset.additem, text: "" };
+  render();
+});
+document.addEventListener("mousedown", (e) => {
+  const chip = e.target.closest("[data-addtype]");
+  if (!chip) return;
+  e.preventDefault(); // keep the focus (and the box open) in the name box
+  pickType(chip.dataset.addtype);
+});
+document.addEventListener("submit", (e) => {
+  if (!e.target.matches(".additem")) return;
+  e.preventDefault();
+  addItem(adding);
+  adding.text = "";
+  $(".additem input").value = "";
+});
+document.addEventListener("input", (e) => {
+  if (e.target.matches(".additem input")) adding.text = e.target.value;
+});
+document.addEventListener("keydown", (e) => {
+  if (!e.target.matches(".additem input")) return;
+  if (e.key === "Escape") {
+    adding = null;
+    render();
+  } else if (e.altKey && TYPE_KEYS[e.code]) {
+    e.preventDefault();
+    pickType(TYPE_KEYS[e.code]);
+  }
+});
+document.addEventListener("focusout", (e) => {
+  // clicking away closes the box; switching to another window, or a redraw, keeps it open
+  if (
+    !e.target.matches(".additem input") ||
+    !adding ||
+    drawing ||
+    !document.hasFocus()
+  )
+    return;
+  const was = adding;
+  adding = null;
+  addItem(was);
+  setTimeout(render); // after the click that moved the focus lands on what it clicked
+});
 
 $("#showCompleted").addEventListener("change", (e) => {
   showCompleted = e.target.checked;

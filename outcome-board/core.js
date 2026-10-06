@@ -23,6 +23,7 @@ export const CFG = {
     effortEstimate: "Effort_Estimate", // entered (a task's effort)
     note: "Review_Note",
     proposed: "Proposed_By",
+    sprints: "Sprints", // two-way with Sprints.Items
   },
   // Sprints.Items lists the sprint's items (two-way with Items.Sprints); membership is written here.
   SP: {
@@ -70,6 +71,11 @@ export const FIELDS = {
     ["Status", "Status", STATUSES],
     ["Urgency", "Urgency", "urgency"],
     ["Impact_Estimate", "Impact estimate", "number"],
+    ["Effort_Estimate", "Effort estimate", "number"],
+  ],
+  T: [
+    ["Status", "Status", STATUSES],
+    ["Urgency", "Urgency", "urgency"],
     ["Effort_Estimate", "Effort estimate", "number"],
   ],
   SP: [

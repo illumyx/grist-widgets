@@ -186,9 +186,9 @@ export function delHTML(d, cap, xTitle = "Remove from this capability") {
 }
 
 // A task shown on its own (directly under a card or list, or in a sprint): a small row. Clicking it
-// opens its parent's side pane.
+// opens its parent's side pane (its own, if it has no parent).
 export const trowHTML = (t, parent, xTitle) =>
-  `<div class="trow${doneOf(t) ? " done" : ""}" draggable="true" tabindex="0" data-type="T" data-id="${t.id}" data-parent="${parent}">
+  `<div class="trow${doneOf(t) ? " done" : ""}${paneIs("T", t.id) ? " open" : ""}" draggable="true" tabindex="0" data-type="T" data-id="${t.id}" data-parent="${parent}">
     <input type="checkbox" data-check${doneOf(t) ? " checked" : ""} aria-label="Done"><span class="name">${esc(t.name)}</span>${optHTML(parent, t.id)}${whoHTML(t)}${xTitle ? `<button class="x" data-unlink title="${xTitle}" aria-label="${xTitle}">×</button>` : ""}</div>`;
 
 // A card's or outcome list's own deliverables and tasks (linked directly, skipping a level)
@@ -320,7 +320,7 @@ function renderPane() {
       ${x.id && FIELDS[L] ? `<div class="fields">${L === "SP" ? "" : typeField()}${FIELDS[L].map(field).join("")}${L === "SP" ? "" : peopleField()}</div>` : ""}
       ${x.id && S.hasSprints && L !== "SP" ? sprintsHTML(L, x) : ""}
       ${note ? `<div class="pane-note">${esc(note)}</div>` : ""}</div>`;
-  if (L !== "SP") {
+  if (L !== "SP" && L !== "T") {
     // the task checklist: a deliverable's tasks, or a capability's or outcome's direct ones (if any)
     const tasks = x.kids.T.map((t) => S.T.get(t)).filter(visible);
     if (L === "D" || tasks.length)
@@ -496,12 +496,11 @@ document.addEventListener("click", (e) => {
       ui.confirm = null;
       render();
     } else if (s.type === "T" && !note.closest("#pane")) {
-      // a task listed on the page (not in the side pane): open its (first) parent
-      const p = S.all.get(S.T.get(s.id).parents[0]);
-      if (p) {
-        ui.pane = { type: p.type, id: p.id };
-        render();
-      }
+      // a task listed on the page (not in the side pane): open its (first) parent, else the task
+      const p = S.all.get(S.T.get(s.id).parents[0]) || S.T.get(s.id);
+      ui.pane = { type: p.type, id: p.id };
+      ui.confirm = null;
+      render();
     }
   } else if (t.closest("#board")) select(null);
 });
@@ -539,13 +538,13 @@ document.addEventListener("change", (e) => {
     return render();
   }
   if (el.matches("[data-settype]")) {
-    // a new task has no side pane of its own: show its parent's instead
+    // a new task shows in its parent's side pane (its own, if it has no parent)
     const x = S[ui.pane.type].get(ui.pane.id),
       p = S.all.get(x.parents[0]);
     ui.pane =
-      el.value !== "T"
-        ? { type: el.value, id: x.id }
-        : p && { type: p.type, id: p.id };
+      el.value === "T" && p
+        ? { type: p.type, id: p.id }
+        : { type: el.value, id: x.id };
     return setType(x, el.value);
   }
   if (el.matches("[data-person]"))

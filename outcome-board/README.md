@@ -67,6 +67,10 @@ The header shows status, dates, and a progress bar (share of effort done among i
   among the others of its kind (outcomes, capabilities, deliverables, tasks stay in that order).
 - x (or Delete) on an item in a sprint takes it out. Items that are only there through a parent have no x.
 - Ctrl/Cmd+C an item, select a sprint, Ctrl/Cmd+V adds it.
+- "+ Add item" at the bottom of a sprint adds a new item (with no parent) to it: pick its type with the chips
+  (or Alt+O/C/D/T; it remembers the last one), type a name, Enter. The box stays open for the next one;
+  Esc closes it, and so does clicking away (adding what was typed).
+- Clicking a task with no parent opens its own side pane (type, status, urgency, effort, assigned, sprints).
 
 ## Add it in Grist
 

@@ -849,7 +849,8 @@ textarea.title:focus {
 .ocard .meta {
   font-weight: 400;
 }
-.ocard.open {
+.ocard.open,
+.trow.open {
   box-shadow: 0 0 0 2px var(--select);
 }
 .trow {
@@ -865,4 +866,36 @@ textarea.title:focus {
 .trow.done .name {
   text-decoration: line-through;
   color: var(--muted);
+}
+/* "+ Add item" on a sprint: type chips over a name box */
+.additem {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.type-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.type-chip {
+  font: inherit;
+  font-size: 11px;
+  padding: 1px 8px;
+  border: 1px solid #b8c2cb;
+  border-radius: 10px;
+  background: #fff;
+  color: var(--muted);
+  cursor: pointer;
+}
+.type-chip[aria-pressed="true"] {
+  background: var(--select);
+  border-color: var(--select);
+  color: #fff;
+}
+.additem input {
+  font: inherit;
+  padding: 4px 6px;
+  border: 1px solid #b8c2cb;
+  border-radius: 3px;
 }
