@@ -603,10 +603,33 @@ textarea.title:focus {
   font: inherit;
 }
 .task {
-  flex-wrap: wrap; /* the sprint menu and pills drop to a second line when the row is full */
+  flex-wrap: wrap; /* the assign and sprint menus and pills drop to a second line when the row is full */
 }
 .task .name {
   flex: 1 1 8em;
+}
+/* initials of the people an item is assigned to */
+.who {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: #dfe5ec;
+  color: var(--ink);
+  align-self: center;
+}
+.lane-head .who {
+  margin-right: 4px;
+}
+.people {
+  display: flex;
+  gap: 12px;
+  padding: 4px 0;
+  color: var(--ink);
+}
+.field .people input {
+  width: auto; /* checkboxes, not full-width text boxes */
+  margin: 0 3px 0 0;
 }
 .tsprints {
   order: 1; /* after the trash button, so that stays on the first line */

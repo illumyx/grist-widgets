@@ -12,6 +12,7 @@ import {
   pills,
   poolHTML,
   visible,
+  whoHTML,
 } from "./view.js";
 
 // An outcome list: its capability cards, then deliverables and tasks linked to it directly.
@@ -23,7 +24,7 @@ function laneHTML(o) {
       .join(" · ");
   return `<section class="lane">
     <div class="lane-head${paneIs("O", o.id) ? " open" : ""}" tabindex="0" data-type="O" data-id="${o.id}" data-parent="0" draggable="true" title="Drag to reorder">${esc(o.name)}
-      <span class="sub">${counts}${imp !== null && imp !== undefined ? ` · impact ${imp}` : ""}</span>${pills(o)}</div>
+      <span class="sub">${counts}${imp !== null && imp !== undefined ? ` · impact ${imp}` : ""}</span>${whoHTML(o)}${pills(o)}</div>
     <div class="lane-body" data-drop="C" data-parent="${o.id}">${o.kids.C.map((c) => capHTML(S.C.get(c), o.id)).join("")}
       ${directDelsHTML(o, "Remove from this outcome")}${directTasksHTML(o, "Remove from this outcome")}
       ${addHTML("C", o.id)}</div></section>`;

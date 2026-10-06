@@ -17,6 +17,7 @@ export const CFG = {
     parents: "Parents", // two-way with Children
     status: "Status",
     urgency: "Urgency",
+    assignees: "Assignees", // a Choice List of PEOPLE
     impact: "Impact",
     effort: "Effort", // shown: rolled up from the children, else the estimate
     effortEstimate: "Effort_Estimate", // entered (a task's effort)
@@ -46,6 +47,8 @@ export const TYPES = {
   D: "Deliverable",
   T: "Task",
 };
+// people's initials: the Items.Assignees choices (also in the grist repo's bin/extend_schema.py)
+export const PEOPLE = ["MK", "DR"];
 export const tableOf = (type) => (type === "SP" ? CFG.SP : CFG.I).table;
 // Items have Impact/Effort (shown), *_Rollup (formula) and *_Estimate (entered).
 // Editable fields in the side pane, per level: [column, label, kind]
@@ -410,6 +413,26 @@ export function setType(x, type) {
   act(
     [["UpdateRecord", CFG.I.table, x.id, { [CFG.I.type]: TYPES[type] }]],
     `“${x.name}” is now a ${LABEL[type]}.`,
+  );
+}
+
+export const assigneesOf = (x) => refs(x.row[CFG.I.assignees]);
+// Assign the item to person, or unassign them if already assigned.
+export function toggleAssignee(x, person) {
+  const was = assigneesOf(x),
+    list = was.includes(person)
+      ? was.filter((p) => p !== person)
+      : PEOPLE.filter((p) => p === person || was.includes(p));
+  act(
+    [
+      [
+        "UpdateRecord",
+        CFG.I.table,
+        x.id,
+        { [CFG.I.assignees]: list.length ? ["L", ...list] : null },
+      ],
+    ],
+    `${was.includes(person) ? "Unassigned" : "Assigned"} ${person} ${was.includes(person) ? "from" : "to"} “${x.name}”.`,
   );
 }
 

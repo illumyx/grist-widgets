@@ -30,6 +30,8 @@ and clicking a deliverable opens its task checklist. Every link is many-to-many.
 - Each parent chip in the side pane has an "optional" box: ticked, that link is optional (the item gets
   none of that parent's impact and isn't counted in its effort; see `doc/impact-allocation.md` in the
   grist repo), and the item shows "optional" where it's drawn under that parent. Unlinking clears it.
+- Assign an item to people (MK, DR; the list is `PEOPLE` in `core.js`) with the side pane's Assigned boxes, or a task with
+  its "Assign..." menu in the checklist (pick a name again to unassign). Their initials show on the card, note, or row.
 - Edit a name at the top of the side pane (Enter saves, Esc cancels); double-click a task to rename it.
 - Tasks: tick to mark done, click the small square to cycle urgency (normal / yellow / red), type an effort.
   A blank effort reads as 0 in Grist, so 0 means "not estimated" (e.g. the sprint progress bars then count items).

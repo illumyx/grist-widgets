@@ -39,6 +39,7 @@
         Type: "Deliverable",
         Item: "Survey preview page",
         Status: "In Progress",
+        Assignees: ["MK"],
         Children: [8, 9],
       },
       {
@@ -55,7 +56,13 @@
         Status: "Not Started",
         Children: [],
       },
-      { id: 8, Type: "Task", Item: "Wireframe", Status: "Done" },
+      {
+        id: 8,
+        Type: "Task",
+        Item: "Wireframe",
+        Status: "Done",
+        Assignees: ["DR"],
+      },
       { id: 9, Type: "Task", Item: "Build page", Status: "Not Started" },
       { id: 10, Type: "Task", Item: "Draft copy", Status: "Not Started" },
     ],
