@@ -1,64 +1,54 @@
 /* Link board: Outcomes (lists) -> Capabilities (sticky notes) -> Deliverables (small notes) -> Tasks (checklist).
- * Links are many-to-many. Each link is written on the PARENT side (parent's RefList order = display order);
- * Grist's two-way references keep the child side in sync.
+ * All four are rows of one Items table (Type says which). Links are many-to-many: each item lists its
+ * children (Items.Children, whose order is the display order); Grist's two-way reference keeps
+ * Items.Parents in sync.
  *
- * core.js: shared data and actions -- column config, loading the four tables, and the user actions that
+ * core.js: shared data and actions -- column config, loading the tables, and the user actions that
  * change them. The current page draws itself through page.render(). */
 
 // ---- Column names: adjust here if you rename things in Grist -------------------------------------
 export const CFG = {
-  O: {
-    table: "Outcomes",
-    name: "Outcome",
-    children: "Capabilities",
+  I: {
+    table: "Items",
+    name: "Item",
+    type: "Type",
+    children: "Children",
+    parents: "Parents", // two-way with Children
+    status: "Status",
+    urgency: "Urgency",
     impact: "Impact",
-  },
-  C: {
-    table: "Capabilities",
-    name: "Capability",
-    children: "Deliverables",
-    parents: "Outcomes",
+    effort: "Effort", // shown: rolled up from the children, else the estimate
+    effortEstimate: "Effort_Estimate", // entered (a task's effort)
     note: "Review_Note",
     proposed: "Proposed_By",
-    status: "Status",
   },
-  D: {
-    table: "Deliverables",
-    name: "Deliverable",
-    children: "Tasks",
-    parents: "Capabilities",
-    note: "Review_Note",
-    status: "Status",
-    urgency: "Urgency",
-  },
-  T: {
-    table: "Tasks",
-    name: "Task",
-    parents: "Deliverables",
-    status: "Status",
-    effort: "Effort",
-    urgency: "Urgency",
-  },
-  // Sprints has one link column per item table, named after it (Sprints.Outcomes, ...); each item
-  // table has a Sprints column (two-way). Membership is written on the Sprints side.
+  // Sprints.Items lists the sprint's items (two-way with Items.Sprints); membership is written here.
   SP: {
     table: "Sprints",
     name: "Sprint",
     start: "Start",
     end: "End",
     status: "Status",
+    items: "Items",
   },
 };
-// Capabilities and Deliverables have Impact/Effort (shown), *_Rollup (formula) and *_Estimate (entered).
+// Items.Type for each level
+export const TYPES = {
+  O: "Outcome",
+  C: "Capability",
+  D: "Deliverable",
+  T: "Task",
+};
+export const tableOf = (type) => (type === "SP" ? CFG.SP : CFG.I).table;
+// Items have Impact/Effort (shown), *_Rollup (formula) and *_Estimate (entered).
 // Editable fields in the side pane, per level: [column, label, kind]
-const STATUSES = ["Not Started", "In Progress", "Review", "Done"];
-const CAP_STATUSES = ["Not Started", "In Progress", "Available"]; // "Available" counts as done
+const STATUSES = ["Not Started", "In Progress", "Review", "Done"]; // a done capability shows as "Available"
 const SPRINT_STATUSES = ["Planned", "Active", "Completed"];
 // kind: "number", "urgency", "date", "text", or a list of choices
 export const FIELDS = {
-  O: [["Impact", "Impact", "number"]],
+  O: [["Impact_Estimate", "Impact", "number"]],
   C: [
-    ["Status", "Status", CAP_STATUSES],
+    ["Status", "Status", STATUSES],
     ["Impact_Estimate", "Impact estimate", "number"],
     ["Effort_Estimate", "Effort estimate", "number"],
   ],
@@ -106,8 +96,7 @@ const PLURAL = {
 export const plural = (n, type) =>
   `${n} ${n === 1 ? LABEL[type] : PLURAL[type]}`;
 export const DONE = "Done",
-  NOT_STARTED = "Not Started",
-  AVAILABLE = "Available";
+  NOT_STARTED = "Not Started";
 
 const api = window.GRIST_MOCK || grist;
 export const $ = (s, el = document) => el.querySelector(s);
@@ -150,29 +139,29 @@ export const ui = {
 
 // ---- Data ------------------------------------------------------------------------------------------
 async function load() {
-  const [tabs, sprints] = await Promise.all([
-    Promise.all(LEVELS.map((k) => api.docApi.fetchTable(CFG[k].table))),
+  const [items, sprints] = await Promise.all([
+    api.docApi.fetchTable(CFG.I.table),
     api.docApi.fetchTable(CFG.SP.table).catch(() => null), // no Sprints table yet: no sprints
   ]);
-  const next = {};
-  LEVELS.forEach((k, i) => {
-    const m = new Map();
-    rowsOf(tabs[i]).forEach((row) => {
-      const id = row.id;
-      m.set(id, {
-        id,
+  // one map per level (items with no known Type are left out)
+  const next = Object.fromEntries(LEVELS.map((k) => [k, new Map()]));
+  const levelOf = Object.fromEntries(LEVELS.map((k) => [TYPES[k], k]));
+  for (const row of rowsOf(items)) {
+    const k = levelOf[row[CFG.I.type]];
+    if (k)
+      next[k].set(row.id, {
+        id: row.id,
         row,
-        name: row[CFG[k].name] || "(untitled)",
-        kids: CHILD[k] ? refs(row[CFG[k].children]) : [],
-        parents: [],
+        name: row[CFG.I.name] || "(untitled)",
+        children: refs(row[CFG.I.children]), // all children, any type
+        kids: [], // children one level down
+        parents: [], // parents one level up
       });
-    });
-    next[k] = m;
-  });
+  }
   for (const k of ["O", "C", "D"]) {
-    // derive parents from parent-side lists, drop dangling refs
+    // kids and parents from the parent-side lists; drop dangling refs
     for (const p of next[k].values()) {
-      p.kids = p.kids.filter((id) => next[CHILD[k]].has(id));
+      p.kids = p.children.filter((id) => next[CHILD[k]].has(id));
       p.kids.forEach((id) => next[CHILD[k]].get(id).parents.push(p.id));
     }
   }
@@ -199,12 +188,7 @@ function loadSprints(table, next) {
       status: row[CFG.SP.status] || "Planned",
       parents: [], // sprints sit at the top, like outcomes
       color: SPRINT_COLORS[(row.id - 1) % SPRINT_COLORS.length],
-      kids: Object.fromEntries(
-        LEVELS.map((k) => [
-          k,
-          refs(row[CFG[k].table]).filter((id) => next[k].has(id)),
-        ]),
-      ),
+      items: refs(row[CFG.SP.items]), // all its items, in order
     }))
     .sort((a, b) => a.id - b.id);
   // Start-date order until the sprints have been put in some other order by hand (dragging their
@@ -220,9 +204,14 @@ function loadSprints(table, next) {
       x.own = new Set();
       x.via = new Map();
     }
-  for (const s of list)
+  for (const s of list) {
+    // its items by level (each in its order)
+    s.kids = Object.fromEntries(
+      LEVELS.map((k) => [k, s.items.filter((id) => next[k].has(id))]),
+    );
     for (const k in s.kids)
       s.kids[k].forEach((id) => next[k].get(id).own.add(s.id));
+  }
   for (const k of ["C", "D", "T"])
     // parents' via is complete before their children's
     for (const x of next[k].values())
@@ -282,11 +271,18 @@ const planned = (x) =>
   [...x.own, ...x.via.keys()].some(
     (sid) => S.SP.get(sid)?.status !== SPRINT_DONE,
   );
+// Set a parent's children of one level (its other children are kept).
 const setKids = (type, parent, list) => [
   "UpdateRecord",
-  CFG[PARENT[type]].table,
+  CFG.I.table,
   parent,
-  { [CFG[PARENT[type]].children]: ["L", ...list] },
+  {
+    [CFG.I.children]: [
+      "L",
+      ...list,
+      ...S[PARENT[type]].get(parent).children.filter((id) => !S[type].has(id)),
+    ],
+  },
 ];
 export const nameOf = (type, id) => (id ? S[type].get(id)?.name : "the pool");
 // names of the pool's stand-in notes for deliverables and tasks
@@ -298,6 +294,15 @@ export const poolName = (type) =>
         T: "Tasks without a deliverable",
       }[type];
 
+// Put items of one level (or sprints) in this row order (manualSort), reusing their current positions
+// so that other rows keep theirs.
+export function rowOrderAction(type, ids) {
+  const pos = ids
+    .map((id) => S[type].get(id).row.manualSort ?? id)
+    .sort((a, b) => a - b);
+  return ["BulkUpdateRecord", tableOf(type), ids, { manualSort: pos }];
+}
+
 // Pool items have no parent list, so their order is the table's row order (manualSort).
 function rowOrder(type, id, beforeId) {
   const all = [...S[type].keys()].filter((x) => x !== id),
@@ -306,12 +311,7 @@ function rowOrder(type, id, beforeId) {
   if (at < 0)
     at = loose.length ? all.indexOf(loose[loose.length - 1]) + 1 : all.length;
   all.splice(at, 0, id);
-  return [
-    "BulkUpdateRecord",
-    CFG[type].table,
-    all,
-    { manualSort: all.map((_, i) => i + 1) },
-  ];
+  return rowOrderAction(type, all);
 }
 
 export function move(type, id, from, to, index, beforeId) {
@@ -374,6 +374,28 @@ export function unlink(type, id, from) {
   );
 }
 
+// The action that adds an item of a level (or a sprint) named name, under parent if given (0: none).
+export function addAction(type, name, parent, fields = {}) {
+  if (type === "SP")
+    return [
+      "AddRecord",
+      CFG.SP.table,
+      null,
+      { [CFG.SP.name]: name, ...fields },
+    ];
+  return [
+    "AddRecord",
+    CFG.I.table,
+    null,
+    {
+      [CFG.I.name]: name,
+      [CFG.I.type]: TYPES[type],
+      ...(parent ? { [CFG.I.parents]: ["L", parent] } : {}),
+      ...fields,
+    },
+  ];
+}
+
 // Save the in-place draft: add the new record, or rename the task. A blank or unchanged name just closes it.
 export function saveDraft() {
   const d = ui.draft,
@@ -381,10 +403,8 @@ export function saveDraft() {
   ui.draft = null;
   if (!name || (d.id && name === S.T.get(d.id)?.name)) return render();
   if (d.id)
-    return act([["UpdateRecord", CFG.T.table, d.id, { [CFG.T.name]: name }]]);
-  const fields = { [CFG[d.type].name]: name, ...d.fields };
-  if (d.parent) fields[CFG[d.type].parents] = ["L", d.parent];
-  act([["AddRecord", CFG[d.type].table, null, fields]], `Added “${name}”.`);
+    return act([["UpdateRecord", CFG.I.table, d.id, { [CFG.I.name]: name }]]);
+  act([addAction(d.type, name, d.parent, d.fields)], `Added “${name}”.`);
 }
 
 // Items that would be left with no parent if (type, id) were deleted, per level: {C: [ids], D: [...], ...}.
@@ -406,14 +426,14 @@ export function below(type, id) {
 // sprint just moves it there).
 export function sprintLink(sid, type, id, add, { from, before } = {}) {
   const update = (sid, add) => {
-    const list = S.SP.get(sid).kids[type].filter((x) => x !== id),
+    const list = S.SP.get(sid).items.filter((x) => x !== id),
       at = list.indexOf(before);
     if (add) at < 0 ? list.push(id) : list.splice(at, 0, id);
     return [
       "UpdateRecord",
       CFG.SP.table,
       sid,
-      { [CFG[type].table]: ["L", ...list] },
+      { [CFG.SP.items]: ["L", ...list] },
     ];
   };
   const name = nameOf(type, id),
@@ -434,9 +454,7 @@ export function remove({ type, id }, withBelow) {
     n = Object.values(gone).flat().length - 1;
   ui.confirm = null;
   act(
-    Object.entries(gone)
-      .filter(([, ids]) => ids.length)
-      .map(([k, ids]) => ["BulkRemoveRecord", CFG[k].table, ids]),
+    [["BulkRemoveRecord", CFG.I.table, Object.values(gone).flat()]],
     `Deleted “${nameOf(type, id)}”${n ? ` and ${n} item${n === 1 ? "" : "s"} below it` : ""}.`,
   );
 }
@@ -467,6 +485,6 @@ export function start() {
   api.onRecords?.(() => refresh()); // fires when the table this widget is bound to changes
   setInterval(() => {
     if (!document.hidden) refresh();
-  }, 5000); // catch edits to the other three tables
+  }, 5000); // catch edits to the other table (Items or Sprints)
   refresh();
 }

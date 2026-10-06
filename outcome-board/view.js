@@ -28,7 +28,9 @@ import {
   poolName,
   render,
   NOT_STARTED,
-  AVAILABLE,
+  tableOf,
+  addAction,
+  rowOrderAction,
   $,
   page,
 } from "./core.js";
@@ -38,9 +40,7 @@ const q = () => $("#search").value.trim().toLowerCase();
 const hideDone = () => $("#hideDone").checked;
 const hidePool = () => $("#hidePool").checked;
 export const matches = (x) => !q() || x.name.toLowerCase().includes(q());
-// (a capability is done when it's "Available"; outcomes have no status)
-export const doneOf = (x) =>
-  [DONE, AVAILABLE].includes(x.row[CFG.D.status] || x.row[CFG.T.status]);
+export const doneOf = (x) => x.row[CFG.I.status] === DONE;
 export const visible = (x) => !(hideDone() && doneOf(x));
 // true if any shown task (by id) matches the filter; lets a deliverable be found by its tasks
 const taskHit = (ids) =>
@@ -153,8 +153,8 @@ const sprintsHTML = (type, x) =>
 export function delHTML(d, cap, xTitle = "Remove from this capability") {
   const tasks = d.kids.map((t) => S.T.get(t)),
     done = tasks.filter(doneOf).length;
-  const st = d.row[CFG.D.status] || "";
-  return `<div class="del${paneIs("D", d.id) ? " open" : ""}" draggable="true" tabindex="0" data-type="D" data-id="${d.id}" data-parent="${cap}" data-status="${esc(st)}"${urgAttr(d.row[CFG.D.urgency])}>
+  const st = d.row[CFG.I.status] || "";
+  return `<div class="del${paneIs("D", d.id) ? " open" : ""}" draggable="true" tabindex="0" data-type="D" data-id="${d.id}" data-parent="${cap}" data-status="${esc(st)}"${urgAttr(d.row[CFG.I.urgency])}>
     ${esc(d.name)}${copies(d, "D")}
     <div class="meta">${tasks.length ? `<span>${done}/${tasks.length} tasks</span>` : ""}${st ? `<span>${esc(st)}</span>` : ""}${pills(d)}</div>${metrics(d)}
     ${cap ? `<button class="x" data-unlink title="${xTitle}" aria-label="${xTitle}">×</button>` : ""}</div>`;
@@ -168,21 +168,21 @@ export function capHTML(c, out, xTitle = "Remove from this outcome") {
   const orphanHit = taskHit(orphanT);
   const filtering = q() && !matches(c); // card is only here for its matching deliverables/tasks
   if (filtering && !shown.length && !orphanHit) return "";
-  const cst = special ? "" : c.row[CFG.C.status] || "";
-  if (hideDone() && cst === AVAILABLE) return "";
+  const cst = special ? "" : c.row[CFG.I.status] || "";
+  if (hideDone() && cst === DONE) return "";
   const open = ui.expanded.has(ekey(out, c.id)) || !!filtering;
   const list = filtering ? shown : dels;
   const urg = dels
     .filter((d) => !doneOf(d))
-    .map((d) => d.row[CFG.D.urgency])
+    .map((d) => d.row[CFG.I.urgency])
     .sort((x, y) => urgRank(y) - urgRank(x))[0];
   return `<div class="cap${special ? " special" : ""}${paneIs("C", c.id) && !special ? " open" : ""}" ${special ? "" : 'draggable="true"'} tabindex="0" data-type="C" data-id="${c.id}" data-parent="${out}"${urgAttr(urg)}>
     <div class="cap-title"><button class="chev" data-toggle aria-expanded="${open}" aria-label="${open ? "Collapse" : "Expand"}">${open ? "▾" : "▸"}</button>${esc(c.name)}</div>
     ${special ? "" : copies(c, "C")}
     <div class="meta"><span>${dels.length} deliverable${dels.length === 1 ? "" : "s"}</span>
 
-      ${cst ? `<span class="pill${cst === AVAILABLE ? " ok" : ""}">${cst === AVAILABLE ? "✓ " : ""}${esc(cst)}</span>` : ""}
-      ${c.row?.[CFG.C.proposed] ? `<span class="pill">${esc(c.row[CFG.C.proposed])}</span>` : ""}${pills(c)}</div>
+      ${cst ? `<span class="pill${cst === DONE ? " ok" : ""}">${cst === DONE ? "✓ Available" : esc(cst)}</span>` : ""}
+      ${c.row?.[CFG.I.proposed] ? `<span class="pill">${esc(c.row[CFG.I.proposed])}</span>` : ""}${pills(c)}</div>
     ${special ? "" : metrics(c)}
     ${
       open
@@ -216,7 +216,8 @@ function renderPane() {
   }
   pane.hidden = false;
   const L = p.type,
-    note = x.row[CFG[L].note];
+    cfg = CFG[L] || CFG.I, // a sprint, or an item
+    note = x.row[cfg.note];
   const field = ([col, label, kind]) => {
     const v = x.row[col] ?? "";
     let input;
@@ -244,7 +245,7 @@ function renderPane() {
   const sum = [measure(x, "Impact"), measure(x, "Effort")]
     .filter(Boolean)
     .join(" · ");
-  let html = `<div class="pane-head"><div class="kind">${LABEL[L]}</div>${x.id ? `<textarea class="title" data-field="${CFG[L].name}" rows="1" aria-label="Name">${esc(x.row[CFG[L].name] ?? "")}</textarea>` : `<h2>${esc(x.name)}</h2>`}
+  let html = `<div class="pane-head"><div class="kind">${LABEL[L]}</div>${x.id ? `<textarea class="title" data-field="${cfg.name}" rows="1" aria-label="Name">${esc(x.row[cfg.name] ?? "")}</textarea>` : `<h2>${esc(x.name)}</h2>`}
       <button class="x" data-close aria-label="Close">×</button>
       ${x.parents.length ? `<div class="chips">${x.parents.map((q) => `<span class="chip">${esc(nameOf(PARENT[L], q))}</span>`).join("")}</div>` : ""}
       ${L !== "O" && sum ? `<div class="summary">${sum}</div>` : ""}
@@ -257,14 +258,14 @@ function renderPane() {
       ${
         tasks
           .map((t) => {
-            const u = t.row[CFG.T.urgency] || "";
+            const u = t.row[CFG.I.urgency] || "";
             if (confirming("T", t.id))
               return `<div class="task" data-type="T" data-id="${t.id}" data-parent="${x.id}">${confirmHTML(ui.confirm)}</div>`;
             return `<div class="task${doneOf(t) ? " done" : ""}${q() && matches(t) ? " hit" : ""}" draggable="true" tabindex="0" data-type="T" data-id="${t.id}" data-parent="${x.id}">
         <input type="checkbox" data-check ${doneOf(t) ? "checked" : ""} aria-label="Done">
         ${ui.draft?.id === t.id ? draftHTML(LABEL.T, ui.draft.text) : `<span class="name">${esc(t.name)}</span>`}
         <button class="urg" data-urg data-u="${esc(u)}" title="Urgency: ${esc(u || "Normal")} (click to change)" aria-label="Urgency: ${esc(u || "Normal")}"></button>
-        <input class="teff" type="number" step="any" data-teffort value="${esc(num(t.row[CFG.T.effort]) ?? "")}" placeholder="effort" aria-label="Effort">
+        <input class="teff" type="number" step="any" data-teffort value="${esc(num(t.row[CFG.I.effortEstimate]) ?? "")}" placeholder="effort" aria-label="Effort">
         ${S.hasSprints ? `<span class="tsprints">${sprintMenu("T", t)}${pills(t, true)}</span>` : ""}
         <button class="trash" data-delete title="Delete task" aria-label="Delete task">${TRASH}</button>
         ${copies(t, "T")}${x.id ? `<button class="x" data-unlink title="Remove from this deliverable" aria-label="Remove from this deliverable">×</button>` : ""}</div>`;
@@ -367,9 +368,9 @@ document.addEventListener("click", (e) => {
     return act([
       [
         "UpdateRecord",
-        CFG.T.table,
+        CFG.I.table,
         +note.dataset.id,
-        { [CFG.T.urgency]: next || null },
+        { [CFG.I.urgency]: next || null },
       ],
     ]);
   }
@@ -407,9 +408,9 @@ document.addEventListener("click", (e) => {
     return act([
       [
         "UpdateRecord",
-        CFG.T.table,
+        CFG.I.table,
         id,
-        { [CFG.T.status]: done ? DONE : NOT_STARTED },
+        { [CFG.I.status]: done ? DONE : NOT_STARTED },
       ],
     ]);
   }
@@ -452,7 +453,7 @@ document.addEventListener("change", (e) => {
         text: "",
         forType: type,
         forId: id,
-        fields: { [CFG.SP.status]: "Planned", [CFG[type].table]: ["L", id] },
+        fields: { [CFG.SP.status]: "Planned", [CFG.SP.items]: ["L", id] },
       };
       return render();
     }
@@ -471,7 +472,7 @@ document.addEventListener("change", (e) => {
     act([
       [
         "UpdateRecord",
-        CFG[ui.pane.type].table,
+        tableOf(ui.pane.type),
         ui.pane.id,
         { [el.dataset.field]: val() },
       ],
@@ -480,9 +481,9 @@ document.addEventListener("change", (e) => {
     act([
       [
         "UpdateRecord",
-        CFG.T.table,
+        CFG.I.table,
         +noteOf(el).dataset.id,
-        { [CFG.T.effort]: val() },
+        { [CFG.I.effortEstimate]: val() },
       ],
     ]);
 });
@@ -515,14 +516,9 @@ document.addEventListener("submit", (e) => {
     name = input.value.trim();
   if (!name || !paneIs("D", ui.pane?.id) || !ui.pane.id) return;
   input.value = "";
-  act([
-    [
-      "AddRecord",
-      CFG.T.table,
-      null,
-      { [CFG.T.name]: name, [CFG.T.parents]: ["L", ui.pane.id] },
-    ],
-  ]).then(() => $("#pane form input")?.focus());
+  act([addAction("T", name, ui.pane.id)]).then(() =>
+    $("#pane form input")?.focus(),
+  );
 });
 
 // Hovering a note outlines its other copies.
@@ -785,14 +781,7 @@ document.addEventListener("drop", (e) => {
     order.splice(at, 0, id);
     clearDrop();
     ui.drag = null;
-    act([
-      [
-        "BulkUpdateRecord",
-        CFG[type].table,
-        order,
-        { manualSort: order.map((_, i) => i + 1) },
-      ],
-    ]);
+    act([rowOrderAction(type, order)]);
     return;
   }
   if (page.dropTarget && !e.target.closest("#pane")) {

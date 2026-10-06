@@ -16,7 +16,7 @@ and clicking a deliverable opens its task checklist. Every link is many-to-many.
 - Keys: arrows move between notes (up/down within a list or the task list, left/right across lists);
   Space expands a capability or opens/closes a deliverable's side pane; Enter opens the side pane.
 - ×N means the note appears in N places; hovering outlines the other copies.
-- Capabilities have a status (Not Started / In Progress / Available); "Hide done" also hides Available ones.
+- Capabilities have a status (Not Started / In Progress / Review / Done); a done one shows as "Available", and "Hide done" hides it.
 - Click an outcome header, capability, or deliverable to open its details in the side pane: status, urgency,
   and impact/effort estimates. "~8" means the number is an estimate; plain "8" is rolled up from linked items.
 - Edit a name at the top of the side pane (Enter saves, Esc cancels); double-click a task to rename it.
@@ -29,7 +29,8 @@ and clicking a deliverable opens its task checklist. Every link is many-to-many.
   The side pane's Sprints row adds the item to a sprint (or a new one) and x takes it out; each task row in
   the side pane has the same menu and pills.
 
-Column names are in `CFG` and `FIELDS` at the top of `core.js`. Expects the columns added by `bin/extend_schema.py`.
+Outcomes, capabilities, deliverables, and tasks are all rows of the Items table (its Type column says which).
+Column names are in `CFG` and `FIELDS` at the top of `core.js`. Expects the tables and columns added by `bin/extend_schema.py`.
 
 ## Try it locally
 
@@ -55,5 +56,5 @@ The header shows status, dates, and a progress bar (share of effort done among i
 
 ## Add it in Grist
 
-Add widget to page -> Custom -> enter the widget URL -> select data: Outcomes -> access: Full document.
+Add widget to page -> Custom -> enter the widget URL -> select data: Items -> access: Full document.
 For the sprints page, add another Custom widget with `.../sprints.html` as the URL and Sprints as its data.

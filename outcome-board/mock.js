@@ -4,65 +4,60 @@
   if (window.top !== window) return; // inside Grist: use the real API
   // two-way links: [parent table, its list column, child table, child's back-reference column]
   const ALL_PAIRS = [
-    ["Outcomes", "Capabilities", "Capabilities", "Outcomes"],
-    ["Capabilities", "Deliverables", "Deliverables", "Capabilities"],
-    ["Deliverables", "Tasks", "Tasks", "Deliverables"],
-    ...["Outcomes", "Capabilities", "Deliverables", "Tasks"].map((t) => [
-      "Sprints",
-      t,
-      t,
-      "Sprints",
-    ]),
+    ["Items", "Children", "Items", "Parents"],
+    ["Sprints", "Items", "Items", "Sprints"],
   ];
+  // ids: outcome 1, capabilities 2-4, deliverables 5-7, tasks 8-10
   const db = window.LINKBOARD_DATA || {
-    Outcomes: [
+    Items: [
       {
         id: 1,
-        Outcome: "Sample client runs a survey in the portal",
-        Capabilities: [1, 2],
-      },
-    ],
-    Capabilities: [
-      {
-        id: 1,
-        Capability: "A consultant can build a survey",
-        Deliverables: [1],
+        Type: "Outcome",
+        Item: "Sample client runs a survey in the portal",
+        Children: [2, 3],
       },
       {
         id: 2,
-        Capability: "A consultant can email respondents",
-        Deliverables: [1, 2],
+        Type: "Capability",
+        Item: "A consultant can build a survey",
+        Children: [5],
       },
       {
         id: 3,
-        Capability: "The team is alerted to production errors",
-        Deliverables: [],
+        Type: "Capability",
+        Item: "A consultant can email respondents",
+        Children: [5, 6],
       },
-    ],
-    Deliverables: [
       {
-        id: 1,
-        Deliverable: "Survey preview page",
+        id: 4,
+        Type: "Capability",
+        Item: "The team is alerted to production errors",
+        Children: [],
+      },
+      {
+        id: 5,
+        Type: "Deliverable",
+        Item: "Survey preview page",
         Status: "In Progress",
-        Tasks: [1, 2],
+        Children: [8, 9],
       },
       {
-        id: 2,
-        Deliverable: "Reminder email template",
+        id: 6,
+        Type: "Deliverable",
+        Item: "Reminder email template",
         Status: "Not Started",
-        Tasks: [3],
+        Children: [10],
       },
       {
-        id: 3,
-        Deliverable: "Error alerts to Slack",
+        id: 7,
+        Type: "Deliverable",
+        Item: "Error alerts to Slack",
         Status: "Not Started",
-        Tasks: [],
+        Children: [],
       },
-    ],
-    Tasks: [
-      { id: 1, Task: "Wireframe", Status: "Done" },
-      { id: 2, Task: "Build page", Status: "Not Started" },
-      { id: 3, Task: "Draft copy", Status: "Not Started" },
+      { id: 8, Type: "Task", Item: "Wireframe", Status: "Done" },
+      { id: 9, Type: "Task", Item: "Build page", Status: "Not Started" },
+      { id: 10, Type: "Task", Item: "Draft copy", Status: "Not Started" },
     ],
     // Start/End are Grist dates: seconds since 1970 (UTC midnight)
     Sprints: [
@@ -72,7 +67,7 @@
         Start: 1789948800,
         End: 1791158400,
         Status: "Completed",
-        Deliverables: [3],
+        Items: [7],
       },
       {
         id: 2,
@@ -80,8 +75,7 @@
         Start: 1791158400,
         End: 1792368000,
         Status: "Active",
-        Capabilities: [1],
-        Tasks: [3],
+        Items: [2, 10],
       },
       {
         id: 3,
@@ -89,7 +83,7 @@
         Start: 1792368000,
         End: 1793577600,
         Status: "Planned",
-        Deliverables: [2],
+        Items: [6],
       },
     ],
   };
