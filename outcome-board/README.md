@@ -22,9 +22,14 @@ and clicking a deliverable opens its task checklist. Every link is many-to-many.
 - Keys: arrows move between notes (up/down within a list or the task list, left/right across lists);
   Space expands a capability or opens/closes a deliverable's side pane; Enter opens the side pane.
 - ×N means the note appears in N places; hovering outlines the other copies.
-- Capabilities have a status (Not Started / In Progress / Review / Done); a done one shows as "Available", and "Hide done" hides it.
-- Click an outcome header, capability, or deliverable to open its details in the side pane: status, urgency,
-  and impact/effort estimates. "~8" means the number is an estimate; plain "8" is rolled up from linked items.
+- Capabilities have a status (Not Started / In Progress / Review / Done); a done one shows as "Available", and "Hide done" hides it (and done outcome lists).
+- Click an outcome header, capability, or deliverable to open its details in the side pane: type, status, urgency,
+  an outcome's target date, and impact/effort estimates. "~8" means the number is an estimate; plain "8" is rolled up from linked items.
+- The side pane's Type changes an item's level (e.g. a deliverable into a task). Levels it can't take are
+  greyed out: it must stay below all of its parents and above all of its children.
+- Each parent chip in the side pane has an "optional" box: ticked, that link is optional (the item gets
+  none of that parent's impact and isn't counted in its effort; see `doc/impact-allocation.md` in the
+  grist repo), and the item shows "optional" where it's drawn under that parent. Unlinking clears it.
 - Edit a name at the top of the side pane (Enter saves, Esc cancels); double-click a task to rename it.
 - Tasks: tick to mark done, click the small square to cycle urgency (normal / yellow / red), type an effort.
 - Yellow/red banners show Elevated/High urgency; a capability shows the highest urgency among its open deliverables.

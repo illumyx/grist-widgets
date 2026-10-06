@@ -517,6 +517,18 @@ textarea.title:focus {
   padding: 1px 6px;
   border-radius: 3px;
 }
+.chip label {
+  color: var(--muted);
+  white-space: nowrap;
+}
+.chip input {
+  margin: 0 1px 0 4px;
+  vertical-align: -2px;
+}
+.trow .pill,
+.task .pill {
+  align-self: center; /* "optional" on a task row */
+}
 /* Sprint pills: one color per sprint; outlined = inherited from a parent */
 .sp {
   display: inline-block;

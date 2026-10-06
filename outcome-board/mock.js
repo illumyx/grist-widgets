@@ -86,6 +86,7 @@
         Items: [6],
       },
     ],
+    Link_weights: [], // a row (Parent, Child) makes that link optional
   };
   const PAIRS = ALL_PAIRS.filter(([pt]) => db[pt]); // custom data may have no Sprints table
   const sync = () =>

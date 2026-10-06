@@ -28,6 +28,11 @@ import {
   poolName,
   render,
   NOT_STARTED,
+  TYPES,
+  isOptional,
+  setOptional,
+  typesFor,
+  setType,
   tableOf,
   addAction,
   rowOrderAction,
@@ -73,6 +78,9 @@ const metrics = (x) => {
     ? `<div class="metrics">${m.join('<span class="dot">·</span>')}</div>`
     : "";
 };
+// marks a note whose link to the parent it's drawn under is optional
+const optHTML = (parent, id) =>
+  isOptional(parent, id) ? `<span class="pill">optional</span>` : "";
 const urgRank = (u) => URGENCY.indexOf(u || "");
 const urgAttr = (u) => (u ? ` data-urgency="${esc(u)}"` : "");
 export const paneIs = (type, id) => ui.pane?.type === type && ui.pane.id === id;
@@ -160,7 +168,7 @@ export function delHTML(d, cap, xTitle = "Remove from this capability") {
   const st = d.row[CFG.I.status] || "";
   return `<div class="del${paneIs("D", d.id) ? " open" : ""}" draggable="true" tabindex="0" data-type="D" data-id="${d.id}" data-parent="${cap}" data-status="${esc(st)}"${urgAttr(d.row[CFG.I.urgency])}>
     ${esc(d.name)}${copies(d)}
-    <div class="meta">${tasks.length ? `<span>${done}/${tasks.length} tasks</span>` : ""}${st ? `<span>${esc(st)}</span>` : ""}${pills(d)}</div>${metrics(d)}
+    <div class="meta">${tasks.length ? `<span>${done}/${tasks.length} tasks</span>` : ""}${st ? `<span>${esc(st)}</span>` : ""}${optHTML(cap, d.id)}${pills(d)}</div>${metrics(d)}
     ${cap ? `<button class="x" data-unlink title="${xTitle}" aria-label="${xTitle}">×</button>` : ""}</div>`;
 }
 
@@ -168,7 +176,7 @@ export function delHTML(d, cap, xTitle = "Remove from this capability") {
 // opens its parent's side pane.
 export const trowHTML = (t, parent, xTitle) =>
   `<div class="trow${doneOf(t) ? " done" : ""}" draggable="true" tabindex="0" data-type="T" data-id="${t.id}" data-parent="${parent}">
-    <input type="checkbox" data-check${doneOf(t) ? " checked" : ""} aria-label="Done"><span class="name">${esc(t.name)}</span>${xTitle ? `<button class="x" data-unlink title="${xTitle}" aria-label="${xTitle}">×</button>` : ""}</div>`;
+    <input type="checkbox" data-check${doneOf(t) ? " checked" : ""} aria-label="Done"><span class="name">${esc(t.name)}</span>${optHTML(parent, t.id)}${xTitle ? `<button class="x" data-unlink title="${xTitle}" aria-label="${xTitle}">×</button>` : ""}</div>`;
 
 // A card's or outcome list's own deliverables and tasks (linked directly, skipping a level)
 export function directDelsHTML(p, xTitle) {
@@ -207,7 +215,7 @@ export function capHTML(c, out, xTitle = "Remove from this outcome") {
   return `<div class="cap${special ? " special" : ""}${paneIs("C", c.id) && !special ? " open" : ""}" ${special ? "" : 'draggable="true"'} tabindex="0" data-type="C" data-id="${c.id}" data-parent="${out}"${urgAttr(urg)}>
     <div class="cap-title"><button class="chev" data-toggle aria-expanded="${open}" aria-label="${open ? "Collapse" : "Expand"}">${open ? "▾" : "▸"}</button>${esc(c.name)}</div>
     ${special ? "" : copies(c)}
-    <div class="meta"><span>${plural(dels.length, "D")}</span>${ownT.length ? `<span>${plural(ownT.length, "T")}</span>` : ""}
+    <div class="meta"><span>${plural(dels.length, "D")}</span>${ownT.length ? `<span>${plural(ownT.length, "T")}</span>` : ""}${special ? "" : optHTML(out, c.id)}
 
       ${cst ? `<span class="pill${cst === DONE ? " ok" : ""}">${cst === DONE ? "✓ Available" : esc(cst)}</span>` : ""}
       ${c.row?.[CFG.I.proposed] ? `<span class="pill">${esc(c.row[CFG.I.proposed])}</span>` : ""}${pills(c)}</div>
@@ -271,14 +279,29 @@ function renderPane() {
     }
     return `<label class="field"><span>${label}</span>${input}</label>`;
   };
+  // a parent's name, with a box to make the link to it optional
+  const chip = (q) =>
+    `<span class="chip">${esc(nameOf(q))}${S.hasWeights ? ` <label title="Optional for “${esc(nameOf(q))}”"><input type="checkbox" data-optional="${q}"${isOptional(q, x.id) ? " checked" : ""}> optional</label>` : ""}</span>`;
+  // Type: levels its parents and children don't allow are greyed out
+  const typeField = () => {
+    const ok = typesFor(x);
+    return `<label class="field"><span>Type</span><select data-settype>${Object.entries(
+      TYPES,
+    )
+      .map(
+        ([k, name]) =>
+          `<option value="${k}"${k === L ? " selected" : ""}${ok.includes(k) ? "" : ` disabled title="It must be below its parents and above its children"`}>${name}</option>`,
+      )
+      .join("")}</select></label>`;
+  };
   const sum = [measure(x, "Impact"), measure(x, "Effort")]
     .filter(Boolean)
     .join(" · ");
   let html = `<div class="pane-head"><div class="kind">${LABEL[L]}</div>${x.id ? `<textarea class="title" data-field="${cfg.name}" rows="1" aria-label="Name">${esc(x.row[cfg.name] ?? "")}</textarea>` : `<h2>${esc(x.name)}</h2>`}
       <button class="x" data-close aria-label="Close">×</button>
-      ${x.parents.length ? `<div class="chips">${x.parents.map((q) => `<span class="chip">${esc(nameOf(q))}</span>`).join("")}</div>` : ""}
+      ${x.parents.length ? `<div class="chips">${x.parents.map(chip).join("")}</div>` : ""}
       ${L !== "O" && sum ? `<div class="summary">${sum}</div>` : ""}
-      ${x.id && FIELDS[L] ? `<div class="fields">${FIELDS[L].map(field).join("")}</div>` : ""}
+      ${x.id && FIELDS[L] ? `<div class="fields">${L === "SP" ? "" : typeField()}${FIELDS[L].map(field).join("")}</div>` : ""}
       ${x.id && S.hasSprints && L !== "SP" ? sprintsHTML(L, x) : ""}
       ${note ? `<div class="pane-note">${esc(note)}</div>` : ""}</div>`;
   if (L !== "SP") {
@@ -294,7 +317,7 @@ function renderPane() {
               return `<div class="task" data-type="T" data-id="${t.id}" data-parent="${x.id}">${confirmHTML(ui.confirm)}</div>`;
             return `<div class="task${doneOf(t) ? " done" : ""}${q() && matches(t) ? " hit" : ""}" draggable="true" tabindex="0" data-type="T" data-id="${t.id}" data-parent="${x.id}">
         <input type="checkbox" data-check ${doneOf(t) ? "checked" : ""} aria-label="Done">
-        ${ui.draft?.id === t.id ? draftHTML(LABEL.T, ui.draft.text) : `<span class="name">${esc(t.name)}</span>`}
+        ${ui.draft?.id === t.id ? draftHTML(LABEL.T, ui.draft.text) : `<span class="name">${esc(t.name)}</span>${optHTML(x.id, t.id)}`}
         <button class="urg" data-urg data-u="${esc(u)}" title="Urgency: ${esc(u || "Normal")} (click to change)" aria-label="Urgency: ${esc(u || "Normal")}"></button>
         <input class="teff" type="number" step="any" data-teffort value="${esc(num(t.row[CFG.I.effortEstimate]) ?? "")}" placeholder="effort" aria-label="Effort">
         ${S.hasSprints ? `<span class="tsprints">${sprintMenu("T", t)}${pills(t, true)}</span>` : ""}
@@ -499,6 +522,18 @@ document.addEventListener("change", (e) => {
     ui.showAll = !el.checked;
     return render();
   }
+  if (el.matches("[data-settype]")) {
+    // a new task has no side pane of its own: show its parent's instead
+    const x = S[ui.pane.type].get(ui.pane.id),
+      p = S.all.get(x.parents[0]);
+    ui.pane =
+      el.value !== "T"
+        ? { type: el.value, id: x.id }
+        : p && { type: p.type, id: p.id };
+    return setType(x, el.value);
+  }
+  if (el.matches("[data-optional]"))
+    return setOptional(+el.dataset.optional, ui.pane.id, el.checked);
   if (el.matches("textarea.title") && !el.value.trim()) return renderPane(); // don't allow blank names
   if (el.matches("[data-field]") && ui.pane)
     act([

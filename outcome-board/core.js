@@ -32,6 +32,12 @@ export const CFG = {
     status: "Status",
     items: "Items",
   },
+  // a row (Parent, Child) makes that link optional
+  LW: {
+    table: "Link_weights",
+    parent: "Parent",
+    child: "Child",
+  },
 };
 // Items.Type for each level
 export const TYPES = {
@@ -47,7 +53,11 @@ const STATUSES = ["Not Started", "In Progress", "Review", "Done"]; // a done cap
 const SPRINT_STATUSES = ["Planned", "Active", "Completed"];
 // kind: "number", "urgency", "date", "text", or a list of choices
 export const FIELDS = {
-  O: [["Impact_Estimate", "Impact", "number"]],
+  O: [
+    ["Status", "Status", STATUSES],
+    ["Target_Date", "Target date", "date"],
+    ["Impact_Estimate", "Impact", "number"],
+  ],
   C: [
     ["Status", "Status", STATUSES],
     ["Impact_Estimate", "Impact estimate", "number"],
@@ -142,9 +152,10 @@ export const ui = {
 
 // ---- Data ------------------------------------------------------------------------------------------
 async function load() {
-  const [items, sprints] = await Promise.all([
+  const [items, sprints, weights] = await Promise.all([
     api.docApi.fetchTable(CFG.I.table),
     api.docApi.fetchTable(CFG.SP.table).catch(() => null), // no Sprints table yet: no sprints
+    api.docApi.fetchTable(CFG.LW.table).catch(() => null), // no Link_weights: no optional links
   ]);
   // one map per level (items with no known Type are left out)
   const next = Object.fromEntries(LEVELS.map((k) => [k, new Map()]));
@@ -184,6 +195,12 @@ async function load() {
     );
   next.SP = loadSprints(sprints, next);
   next.hasSprints = !!sprints; // the Sprints table exists (extend_schema.py has run)
+  next.hasWeights = !!weights;
+  next.optional = new Map(); // "parent:child" -> Link_weights row ids
+  for (const r of weights ? rowsOf(weights) : []) {
+    const k = `${r[CFG.LW.parent]}:${r[CFG.LW.child]}`;
+    next.optional.set(k, [...(next.optional.get(k) || []), r.id]);
+  }
   S = next;
 }
 
@@ -338,6 +355,7 @@ export function move(type, id, from, to, index, beforeId) {
           from,
           kidsOf(type, from).filter((x) => x !== id),
         ),
+        ...dropWeights(from, id),
       );
     if (to) {
       const list = kidsOf(type, to);
@@ -352,6 +370,47 @@ export function move(type, id, from, to, index, beforeId) {
       acts,
       `${from ? "Moved" : "Linked"} “${nameOf(id)}” to “${nameOf(to)}”.`, // from the pool = a new link
     );
+}
+
+// Is the link from parent to child optional? (Its Link_weights row only counts while the link exists.)
+export const isOptional = (parent, child) =>
+  !!S.all.get(child)?.parents.includes(parent) &&
+  S.optional.has(`${parent}:${child}`);
+// Removes the link's Link_weights rows (when it's unlinked), if any.
+const dropWeights = (parent, child) =>
+  S.optional.has(`${parent}:${child}`)
+    ? [["BulkRemoveRecord", CFG.LW.table, S.optional.get(`${parent}:${child}`)]]
+    : [];
+
+export function setOptional(parent, child, on) {
+  act(
+    on
+      ? [
+          [
+            "AddRecord",
+            CFG.LW.table,
+            null,
+            { [CFG.LW.parent]: parent, [CFG.LW.child]: child },
+          ],
+        ]
+      : dropWeights(parent, child),
+    `“${nameOf(child)}” is ${on ? "optional" : "required"} for “${nameOf(parent)}”.`,
+  );
+}
+
+// Levels an item could change to: below all of its parents and above all of its children.
+export const typesFor = (x) =>
+  LEVELS.filter(
+    (k) =>
+      x.parents.every((q) => canParent(S.all.get(q).type, k)) &&
+      x.children.every((c) => canParent(k, S.all.get(c).type)),
+  );
+
+export function setType(x, type) {
+  act(
+    [["UpdateRecord", CFG.I.table, x.id, { [CFG.I.type]: TYPES[type] }]],
+    `“${x.name}” is now a ${LABEL[type]}.`,
+  );
 }
 
 export function link(type, id, to) {
@@ -373,6 +432,7 @@ export function unlink(type, id, from) {
         from,
         kidsOf(type, from).filter((x) => x !== id),
       ),
+      ...dropWeights(from, id),
     ],
     `Removed “${nameOf(id)}” from “${nameOf(from)}”.`,
   );

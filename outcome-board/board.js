@@ -11,6 +11,7 @@ import {
   paneIs,
   pills,
   poolHTML,
+  visible,
 } from "./view.js";
 
 // An outcome list: its capability cards, then deliverables and tasks linked to it directly.
@@ -31,7 +32,7 @@ function laneHTML(o) {
 page.render = () =>
   drawBoard(
     poolHTML("Drag notes here to unlink them") +
-      [...S.O.values()].map(laneHTML).join("") +
+      [...S.O.values()].filter(visible).map(laneHTML).join("") +
       addHTML("O", 0),
   );
 
