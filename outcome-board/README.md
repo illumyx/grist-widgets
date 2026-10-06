@@ -3,7 +3,13 @@
 Outcomes are lists, capabilities are sticky notes, deliverables are small notes on them,
 and clicking a deliverable opens its task checklist. Every link is many-to-many.
 
-- Drag a note to move it (between lists, between capability cards, or a task onto a deliverable).
+- Levels can be skipped: an outcome list can also hold deliverables and tasks directly (after its
+  capability cards), and a capability its own tasks (after its deliverables). Those tasks are small rows;
+  clicking one opens its parent's side pane, which lists them like a deliverable's checklist (with an
+  "Add a task" box). A child is always at a lower level than its parent; the board won't drop or paste
+  it anywhere else.
+- Drag a note to move it: between lists, between capability cards, or onto any card, note, or list that
+  can hold it (dropped anywhere in an outcome list, a deliverable or task goes directly under the outcome).
   Dragging near the edge of the board or a list scrolls it.
 - To link a note in a second place: click it, Ctrl/Cmd+C, click the destination (a list header,
   a capability, or open a deliverable), Ctrl/Cmd+V.

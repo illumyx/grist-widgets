@@ -32,6 +32,7 @@ import {
   matches,
   hit,
   poolHTML,
+  trowHTML,
 } from "./view.js";
 
 ui.showAll = true; // the pool starts with every item ("Hide linked" unticked)
@@ -48,12 +49,7 @@ const day = (sec) =>
 
 const outcomeHTML = (o, sp) =>
   `<div class="ocard${paneIs("O", o.id) ? " open" : ""}" draggable="true" tabindex="0" data-type="O" data-id="${o.id}" data-parent="${sp.id}">${esc(o.name)}
-    <div class="meta"><span>${plural(o.kids.length, "C")}</span></div>${xButton}</div>`;
-
-// a task added to the sprint on its own: a small row (click opens its deliverable)
-const taskHTML = (t, sp) =>
-  `<div class="trow${doneOf(t) ? " done" : ""}" draggable="true" tabindex="0" data-type="T" data-id="${t.id}" data-parent="${sp.id}">
-    <input type="checkbox" data-check${doneOf(t) ? " checked" : ""} aria-label="Done"><span class="name">${esc(t.name)}</span>${xButton}</div>`;
+    <div class="meta"><span>${plural(o.kids.C.length, "C")}</span></div>${xButton}</div>`;
 
 function sprintHTML(sp) {
   const k = sp.kids,
@@ -63,7 +59,7 @@ function sprintHTML(sp) {
     ),
     // progress: done among the items with nothing under them (a parent's effort is its children's),
     // weighted by effort when every one has an effort (a blank one reads as 0), else counted
-    leaves = items.filter((x) => !x.kids.length),
+    leaves = items.filter((x) => !x.children.length),
     byEffort = leaves.every((x) => x.row[CFG.I.effort] > 0),
     weight = (x) => (byEffort ? x.row[CFG.I.effort] : 1),
     total = leaves.reduce((n, x) => n + weight(x), 0),
@@ -87,7 +83,7 @@ function sprintHTML(sp) {
       k.T.map((id) => S.T.get(id))
         .filter(visible)
         .filter(matches)
-        .map((t) => taskHTML(t, sp))
+        .map((t) => trowHTML(t, sp.id, X))
         .join("");
   const sub = [sp.status, dates].filter(Boolean),
     pct = Math.round((100 * done) / total),
@@ -171,7 +167,7 @@ page.unlink = (s, note) => {
   if (directlyIn(sid, s.type, s.id))
     return sprintLink(sid, s.type, s.id, false);
   toast(
-    `“${nameOf(s.type, s.id)}” is in “${S.SP.get(sid).name}” through a parent; take that out instead.`,
+    `“${nameOf(s.id)}” is in “${S.SP.get(sid).name}” through a parent; take that out instead.`,
   );
 };
 page.paste = (clip, el) => {

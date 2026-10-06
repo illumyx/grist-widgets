@@ -1,7 +1,8 @@
 /* Link board: Outcomes (lists) -> Capabilities (sticky notes) -> Deliverables (small notes) -> Tasks (checklist).
  * All four are rows of one Items table (Type says which). Links are many-to-many: each item lists its
  * children (Items.Children, whose order is the display order); Grist's two-way reference keeps
- * Items.Parents in sync.
+ * Items.Parents in sync. A child can skip levels (a task directly under a capability), but is always
+ * at a lower level than its parent.
  *
  * core.js: shared data and actions -- column config, loading the tables, and the user actions that
  * change them. The current page draws itself through page.render(). */
@@ -78,8 +79,9 @@ const SPRINT_COLORS = [
   "#c9ccd1",
 ];
 const LEVELS = ["O", "C", "D", "T"];
-const CHILD = { O: "C", C: "D", D: "T" };
-export const PARENT = { C: "O", D: "C", T: "D" };
+// can an item of level p have a child of level c?
+export const canParent = (p, c) =>
+  LEVELS.includes(p) && LEVELS.indexOf(p) < LEVELS.indexOf(c);
 export const LABEL = {
   O: "outcome",
   C: "capability",
@@ -108,6 +110,7 @@ export const esc = (s) =>
 const refs = (v) => (Array.isArray(v) ? (v[0] === "L" ? v.slice(1) : v) : []);
 
 export let S = {
+  all: new Map(), // every item by id
   O: new Map(),
   C: new Map(),
   D: new Map(),
@@ -151,22 +154,29 @@ async function load() {
     if (k)
       next[k].set(row.id, {
         id: row.id,
+        type: k,
         row,
         name: row[CFG.I.name] || "(untitled)",
-        children: refs(row[CFG.I.children]), // all children, any type
-        kids: [], // children one level down
-        parents: [], // parents one level up
+        children: refs(row[CFG.I.children]),
+        kids: { C: [], D: [], T: [] }, // children by level
+        parents: [],
       });
   }
-  for (const k of ["O", "C", "D"]) {
-    // kids and parents from the parent-side lists; drop dangling refs
-    for (const p of next[k].values()) {
-      p.kids = p.children.filter((id) => next[CHILD[k]].has(id));
-      p.kids.forEach((id) => next[CHILD[k]].get(id).parents.push(p.id));
+  next.all = new Map(LEVELS.flatMap((k) => [...next[k]]));
+  for (const p of next.all.values()) {
+    // kids and parents from the parent-side lists; drop dangling refs and children that aren't at a
+    // lower level
+    p.children = p.children.filter((id) =>
+      canParent(p.type, next.all.get(id)?.type),
+    );
+    for (const id of p.children) {
+      const c = next.all.get(id);
+      p.kids[c.type].push(id);
+      c.parents.push(p.id);
     }
   }
   const pos = (x) => x.row.manualSort ?? x.id; // row order in Grist; used for outcome lists and the pool
-  for (const k in next)
+  for (const k of LEVELS)
     next[k] = new Map(
       [...next[k].values()]
         .sort((a, b) => pos(a) - pos(b))
@@ -213,13 +223,13 @@ function loadSprints(table, next) {
       s.kids[k].forEach((id) => next[k].get(id).own.add(s.id));
   }
   for (const k of ["C", "D", "T"])
-    // parents' via is complete before their children's
+    // parents are at higher levels, so their via is complete before their children's
     for (const x of next[k].values())
       for (const pid of x.parents) {
-        const p = next[PARENT[k]].get(pid),
+        const p = next.all.get(pid),
           add = (sid, src) =>
             x.own.has(sid) || x.via.has(sid) || x.via.set(sid, src);
-        p.own.forEach((sid) => add(sid, { type: PARENT[k], item: p }));
+        p.own.forEach((sid) => add(sid, { type: p.type, item: p }));
         p.via.forEach((src, sid) => add(sid, src));
       }
   return new Map(list.map((s) => [s.id, s]));
@@ -261,7 +271,7 @@ export async function act(actions, msg) {
 export const kidsOf = (type, parent) =>
   // children of a parent; parent 0 = the pool (unlinked items, or all of them)
   parent
-    ? [...S[PARENT[type]].get(parent).kids]
+    ? [...S.all.get(parent).kids[type]]
     : [...S[type].values()]
         .filter((x) => ui.showAll || !x.parents.length)
         .filter((x) => !(ui.hidePlanned && planned(x)))
@@ -271,7 +281,7 @@ const planned = (x) =>
   [...x.own, ...x.via.keys()].some(
     (sid) => S.SP.get(sid)?.status !== SPRINT_DONE,
   );
-// Set a parent's children of one level (its other children are kept).
+// Set a parent's children of one level (its other children are kept, grouped by level).
 const setKids = (type, parent, list) => [
   "UpdateRecord",
   CFG.I.table,
@@ -279,20 +289,16 @@ const setKids = (type, parent, list) => [
   {
     [CFG.I.children]: [
       "L",
-      ...list,
-      ...S[PARENT[type]].get(parent).children.filter((id) => !S[type].has(id)),
+      ...["C", "D", "T"].flatMap((k) =>
+        k === type ? list : S.all.get(parent).kids[k],
+      ),
     ],
   },
 ];
-export const nameOf = (type, id) => (id ? S[type].get(id)?.name : "the pool");
+export const nameOf = (id) => (id ? S.all.get(id)?.name : "the pool");
 // names of the pool's stand-in notes for deliverables and tasks
 export const poolName = (type) =>
-  ui.showAll
-    ? `All ${PLURAL[type]}`
-    : {
-        D: "Deliverables without a capability",
-        T: "Tasks without a deliverable",
-      }[type];
+  `${ui.showAll ? "All" : "Unlinked"} ${PLURAL[type]}`;
 
 // Put items of one level (or sprints) in this row order (manualSort), reusing their current positions
 // so that other rows keep theirs.
@@ -344,19 +350,17 @@ export function move(type, id, from, to, index, beforeId) {
   if (acts.length)
     act(
       acts,
-      `${from ? "Moved" : "Linked"} “${nameOf(type, id)}” to “${nameOf(PARENT[type], to)}”.`, // from the pool = a new link
+      `${from ? "Moved" : "Linked"} “${nameOf(id)}” to “${nameOf(to)}”.`, // from the pool = a new link
     );
 }
 
 export function link(type, id, to) {
   const list = kidsOf(type, to);
   if (list.includes(id))
-    return toast(
-      `“${nameOf(type, id)}” is already on “${nameOf(PARENT[type], to)}”.`,
-    );
+    return toast(`“${nameOf(id)}” is already on “${nameOf(to)}”.`);
   act(
     [setKids(type, to, [...list, id])],
-    `Linked “${nameOf(type, id)}” to “${nameOf(PARENT[type], to)}”.`,
+    `Linked “${nameOf(id)}” to “${nameOf(to)}”.`,
   );
 }
 
@@ -370,7 +374,7 @@ export function unlink(type, id, from) {
         kidsOf(type, from).filter((x) => x !== id),
       ),
     ],
-    `Removed “${nameOf(type, id)}” from “${nameOf(PARENT[type], from)}”.`,
+    `Removed “${nameOf(id)}” from “${nameOf(from)}”.`,
   );
 }
 
@@ -410,13 +414,14 @@ export function saveDraft() {
 // Items that would be left with no parent if (type, id) were deleted, per level: {C: [ids], D: [...], ...}.
 // Something also linked to a parent that stays is kept.
 export function below(type, id) {
-  const gone = { [type]: [id] };
-  for (let p = type, k = CHILD[type]; k; p = k, k = CHILD[k])
+  const gone = { [type]: [id] },
+    all = new Set([id]);
+  for (const k of LEVELS.slice(LEVELS.indexOf(type) + 1)) {
     gone[k] = [...S[k].values()]
-      .filter(
-        (x) => x.parents.length && x.parents.every((q) => gone[p].includes(q)),
-      )
+      .filter((x) => x.parents.length && x.parents.every((q) => all.has(q)))
       .map((x) => x.id);
+    gone[k].forEach((i) => all.add(i));
+  }
   return gone;
 }
 
@@ -436,7 +441,7 @@ export function sprintLink(sid, type, id, add, { from, before } = {}) {
       { [CFG.SP.items]: ["L", ...list] },
     ];
   };
-  const name = nameOf(type, id),
+  const name = nameOf(id),
     to = S.SP.get(sid).name,
     within = add && S.SP.get(sid).kids[type].includes(id);
   act(
@@ -455,7 +460,7 @@ export function remove({ type, id }, withBelow) {
   ui.confirm = null;
   act(
     [["BulkRemoveRecord", CFG.I.table, Object.values(gone).flat()]],
-    `Deleted “${nameOf(type, id)}”${n ? ` and ${n} item${n === 1 ? "" : "s"} below it` : ""}.`,
+    `Deleted “${nameOf(id)}”${n ? ` and ${n} item${n === 1 ? "" : "s"} below it` : ""}.`,
   );
 }
 

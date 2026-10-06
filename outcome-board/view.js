@@ -15,7 +15,7 @@ import {
   CFG,
   FIELDS,
   URGENCY,
-  PARENT,
+  canParent,
   LABEL,
   plural,
   DONE,
@@ -45,10 +45,17 @@ export const visible = (x) => !(hideDone() && doneOf(x));
 // true if any shown task (by id) matches the filter; lets a deliverable be found by its tasks
 const taskHit = (ids) =>
   ids.some((t) => visible(S.T.get(t)) && matches(S.T.get(t)));
-export const hit = (d) => matches(d) || taskHit(d.kids);
-const copies = (x, level) =>
+export const hit = (d) => matches(d) || taskHit(d.kids.T);
+// where an item is linked: "3 capabilities", or "3 places" when its parents are at different levels
+const onWhat = (x) => {
+  const levels = new Set(x.parents.map((q) => S.all.get(q).type));
+  return levels.size === 1
+    ? plural(x.parents.length, [...levels][0])
+    : `${x.parents.length} places`;
+};
+const copies = (x) =>
   x.parents.length > 1
-    ? `<span class="copies" title="On ${plural(x.parents.length, PARENT[level])}">×${x.parents.length}</span>`
+    ? `<span class="copies" title="On ${onWhat(x)}">×${x.parents.length}</span>`
     : "";
 export const num = (v) =>
   v === null || v === undefined || v === "" || typeof v === "object" ? null : v;
@@ -79,10 +86,7 @@ function confirmHTML({ type, id }) {
     .filter(([k, ids]) => k !== type && ids.length)
     .map(([k, ids]) => plural(ids.length, k))
     .join(", ");
-  const where =
-    x.parents.length > 1
-      ? ` It's on ${plural(x.parents.length, PARENT[type])}.`
-      : "";
+  const where = x.parents.length > 1 ? ` It's on ${onWhat(x)}.` : "";
   return `<div class="confirm"><span>Delete “${esc(x.name)}”?${where}</span>
     ${
       more
@@ -151,35 +155,59 @@ const sprintsHTML = (type, x) =>
   `<div class="sprints"><span class="label">Sprints</span>${pills(x, true)}${sprintMenu(type, x)}</div>`;
 
 export function delHTML(d, cap, xTitle = "Remove from this capability") {
-  const tasks = d.kids.map((t) => S.T.get(t)),
+  const tasks = d.kids.T.map((t) => S.T.get(t)),
     done = tasks.filter(doneOf).length;
   const st = d.row[CFG.I.status] || "";
   return `<div class="del${paneIs("D", d.id) ? " open" : ""}" draggable="true" tabindex="0" data-type="D" data-id="${d.id}" data-parent="${cap}" data-status="${esc(st)}"${urgAttr(d.row[CFG.I.urgency])}>
-    ${esc(d.name)}${copies(d, "D")}
+    ${esc(d.name)}${copies(d)}
     <div class="meta">${tasks.length ? `<span>${done}/${tasks.length} tasks</span>` : ""}${st ? `<span>${esc(st)}</span>` : ""}${pills(d)}</div>${metrics(d)}
     ${cap ? `<button class="x" data-unlink title="${xTitle}" aria-label="${xTitle}">×</button>` : ""}</div>`;
 }
 
+// A task shown on its own (directly under a card or list, or in a sprint): a small row. Clicking it
+// opens its parent's side pane.
+export const trowHTML = (t, parent, xTitle) =>
+  `<div class="trow${doneOf(t) ? " done" : ""}" draggable="true" tabindex="0" data-type="T" data-id="${t.id}" data-parent="${parent}">
+    <input type="checkbox" data-check${doneOf(t) ? " checked" : ""} aria-label="Done"><span class="name">${esc(t.name)}</span>${xTitle ? `<button class="x" data-unlink title="${xTitle}" aria-label="${xTitle}">×</button>` : ""}</div>`;
+
+// A card's or outcome list's own deliverables and tasks (linked directly, skipping a level)
+export function directDelsHTML(p, xTitle) {
+  const dels = p.kids.D.map((d) => S.D.get(d))
+    .filter(visible)
+    .filter(hit);
+  return dels.length
+    ? `<div class="dels" data-drop="D" data-parent="${p.id}">${dels.map((d) => delHTML(d, p.id, xTitle)).join("")}</div>`
+    : "";
+}
+export function directTasksHTML(p, xTitle) {
+  const tasks = p.kids.T.map((t) => S.T.get(t)).filter(visible);
+  return tasks.length
+    ? `<div class="trows" data-drop="T" data-parent="${p.id}">${tasks.map((t) => trowHTML(t, p.id, xTitle)).join("")}</div>`
+    : "";
+}
+
 export function capHTML(c, out, xTitle = "Remove from this outcome") {
   const special = c.id === 0;
-  const dels = c.kids.map((d) => S.D.get(d)).filter(visible);
+  const dels = c.kids.D.map((d) => S.D.get(d)).filter(visible);
   const shown = dels.filter(hit);
+  const ownT = c.kids.T.map((t) => S.T.get(t)).filter(visible);
   const orphanT = special ? kidsOf("T", 0) : [];
   const orphanHit = taskHit(orphanT);
   const filtering = q() && !matches(c); // card is only here for its matching deliverables/tasks
-  if (filtering && !shown.length && !orphanHit) return "";
+  if (filtering && !shown.length && !orphanHit && !ownT.some(matches))
+    return "";
   const cst = special ? "" : c.row[CFG.I.status] || "";
   if (hideDone() && cst === DONE) return "";
   const open = ui.expanded.has(ekey(out, c.id)) || !!filtering;
   const list = filtering ? shown : dels;
-  const urg = dels
+  const urg = [...dels, ...ownT]
     .filter((d) => !doneOf(d))
     .map((d) => d.row[CFG.I.urgency])
     .sort((x, y) => urgRank(y) - urgRank(x))[0];
   return `<div class="cap${special ? " special" : ""}${paneIs("C", c.id) && !special ? " open" : ""}" ${special ? "" : 'draggable="true"'} tabindex="0" data-type="C" data-id="${c.id}" data-parent="${out}"${urgAttr(urg)}>
     <div class="cap-title"><button class="chev" data-toggle aria-expanded="${open}" aria-label="${open ? "Collapse" : "Expand"}">${open ? "▾" : "▸"}</button>${esc(c.name)}</div>
-    ${special ? "" : copies(c, "C")}
-    <div class="meta"><span>${dels.length} deliverable${dels.length === 1 ? "" : "s"}</span>
+    ${special ? "" : copies(c)}
+    <div class="meta"><span>${plural(dels.length, "D")}</span>${ownT.length ? `<span>${plural(ownT.length, "T")}</span>` : ""}
 
       ${cst ? `<span class="pill${cst === DONE ? " ok" : ""}">${cst === DONE ? "✓ Available" : esc(cst)}</span>` : ""}
       ${c.row?.[CFG.I.proposed] ? `<span class="pill">${esc(c.row[CFG.I.proposed])}</span>` : ""}${pills(c)}</div>
@@ -188,7 +216,8 @@ export function capHTML(c, out, xTitle = "Remove from this outcome") {
       open
         ? `<div class="dels" data-drop="D" data-parent="${special ? 0 : c.id}">${list.map((d) => delHTML(d, special ? 0 : c.id)).join("")}
       ${orphanT.length && (!filtering || orphanHit) ? `<div class="del orphan${paneIs("D", 0) ? " open" : ""}" tabindex="0" data-type="D" data-id="0" data-parent="0">${poolName("T")} (${orphanT.length})</div>` : ""}
-      ${special ? "" : addHTML("D", c.id)}</div>`
+      ${special ? "" : addHTML("D", c.id)}</div>
+      ${special ? "" : directTasksHTML(c, "Remove from this capability")}`
         : ""
     }
     ${out && !special ? `<button class="x" data-unlink title="${xTitle}" aria-label="${xTitle}">×</button>` : ""}</div>`;
@@ -203,7 +232,7 @@ function renderPane() {
       ? {
           id: 0,
           name: poolName("T"),
-          kids: kidsOf("T", 0),
+          kids: { T: kidsOf("T", 0) },
           parents: [],
           row: {},
         }
@@ -247,14 +276,16 @@ function renderPane() {
     .join(" · ");
   let html = `<div class="pane-head"><div class="kind">${LABEL[L]}</div>${x.id ? `<textarea class="title" data-field="${cfg.name}" rows="1" aria-label="Name">${esc(x.row[cfg.name] ?? "")}</textarea>` : `<h2>${esc(x.name)}</h2>`}
       <button class="x" data-close aria-label="Close">×</button>
-      ${x.parents.length ? `<div class="chips">${x.parents.map((q) => `<span class="chip">${esc(nameOf(PARENT[L], q))}</span>`).join("")}</div>` : ""}
+      ${x.parents.length ? `<div class="chips">${x.parents.map((q) => `<span class="chip">${esc(nameOf(q))}</span>`).join("")}</div>` : ""}
       ${L !== "O" && sum ? `<div class="summary">${sum}</div>` : ""}
       ${x.id && FIELDS[L] ? `<div class="fields">${FIELDS[L].map(field).join("")}</div>` : ""}
       ${x.id && S.hasSprints && L !== "SP" ? sprintsHTML(L, x) : ""}
       ${note ? `<div class="pane-note">${esc(note)}</div>` : ""}</div>`;
-  if (L === "D") {
-    const tasks = x.kids.map((t) => S.T.get(t)).filter(visible);
-    html += `<div class="tasks" data-drop="T" data-parent="${x.id}">
+  if (L !== "SP") {
+    // the task checklist: a deliverable's tasks, or a capability's or outcome's direct ones (if any)
+    const tasks = x.kids.T.map((t) => S.T.get(t)).filter(visible);
+    if (L === "D" || tasks.length)
+      html += `<div class="tasks" data-drop="T" data-parent="${x.id}">
       ${
         tasks
           .map((t) => {
@@ -268,11 +299,12 @@ function renderPane() {
         <input class="teff" type="number" step="any" data-teffort value="${esc(num(t.row[CFG.I.effortEstimate]) ?? "")}" placeholder="effort" aria-label="Effort">
         ${S.hasSprints ? `<span class="tsprints">${sprintMenu("T", t)}${pills(t, true)}</span>` : ""}
         <button class="trash" data-delete title="Delete task" aria-label="Delete task">${TRASH}</button>
-        ${copies(t, "T")}${x.id ? `<button class="x" data-unlink title="Remove from this deliverable" aria-label="Remove from this deliverable">×</button>` : ""}</div>`;
+        ${copies(t)}${x.id ? `<button class="x" data-unlink title="Remove from this ${LABEL[L]}" aria-label="Remove from this ${LABEL[L]}">×</button>` : ""}</div>`;
           })
           .join("") || `<div class="empty">No tasks yet.</div>`
-      }</div>
-      ${x.id ? `<form data-addtask><input type="text" placeholder="Add a task and press Enter" aria-label="New task"></form>` : ""}`;
+      }</div>`;
+    if (x.id)
+      html += `<form data-addtask><input type="text" placeholder="Add a task and press Enter" aria-label="New task"></form>`;
   }
   if (x.id)
     html += `<div class="pane-foot">${confirming(L, x.id) ? confirmHTML(ui.confirm) : `<button class="danger-link" data-delete>Delete ${LABEL[L]}</button>`}</div>`;
@@ -292,11 +324,11 @@ const grow = (el) => {
 };
 
 function findEl(sel) {
-  const sc = sel.type === "T" ? $("#pane") : $("#board");
+  const css = `[data-type="${sel.type}"][data-id="${sel.id}"][data-parent="${sel.parent}"]`;
   return (
-    sc.querySelector(
-      `[data-type="${sel.type}"][data-id="${sel.id}"][data-parent="${sel.parent}"]`,
-    ) || (sel.type === "O" ? $(`#board .lane-head[data-id="${sel.id}"]`) : null)
+    (sel.type === "T" && $("#pane").querySelector(css)) || // tasks: the side pane's first
+    $("#board").querySelector(css) ||
+    (sel.type === "O" ? $(`#board .lane-head[data-id="${sel.id}"]`) : null)
   );
 }
 const noteOf = (el) => el?.closest("[data-type]");
@@ -425,10 +457,10 @@ document.addEventListener("click", (e) => {
       ui.confirm = null;
       render();
     } else if (s.type === "T" && !note.closest("#pane")) {
-      // a task listed on the page (not in the side pane): open its deliverable
-      const d = S.T.get(s.id).parents[0];
-      if (d) {
-        ui.pane = { type: "D", id: d };
+      // a task listed on the page (not in the side pane): open its (first) parent
+      const p = S.all.get(S.T.get(s.id).parents[0]);
+      if (p) {
+        ui.pane = { type: p.type, id: p.id };
         render();
       }
     }
@@ -514,7 +546,7 @@ document.addEventListener("submit", (e) => {
   e.preventDefault();
   const input = $("input", e.target),
     name = input.value.trim();
-  if (!name || !paneIs("D", ui.pane?.id) || !ui.pane.id) return;
+  if (!name || !ui.pane?.id || ui.pane.type === "SP") return;
   input.value = "";
   act([addAction("T", name, ui.pane.id)]).then(() =>
     $("#pane form input")?.focus(),
@@ -560,30 +592,24 @@ document.addEventListener("keydown", (e) => {
     s = ui.sel;
   if (mod && e.key === "c" && s && s.type !== "O" && s.id) {
     ui.clip = { type: s.type, id: s.id };
-    const where = {
-      C: "an outcome list",
-      D: "a capability",
-      T: "a deliverable",
-    }[s.type];
     toast(
-      `Copied “${nameOf(s.type, s.id)}”. Select ${where} and press ${e.metaKey ? "⌘" : "Ctrl+"}V.`,
+      `Copied “${nameOf(s.id)}”. Select ${PASTE_INTO[s.type]} and press ${e.metaKey ? "⌘" : "Ctrl+"}V.`,
     );
     e.preventDefault();
   } else if (mod && e.key === "v" && ui.clip) {
     e.preventDefault();
     if (page.paste?.(ui.clip, s && findEl(s))) return;
-    const c = ui.clip,
-      want = PARENT[c.type];
+    // into the selected item, or a selected sibling's parent, or the side pane's item
+    const c = ui.clip;
     let target = null;
-    if (c.type === "T" && ui.pane?.type === "D" && ui.pane.id)
-      target = ui.pane.id;
-    else if (s?.type === want) target = s.id;
+    if (s?.id && canParent(s.type, c.type)) target = s.id;
     else if (s?.type === c.type) target = s.parent;
-    if (!target)
-      return toast(
-        `Select ${{ O: "an outcome list", C: "a capability", D: "a deliverable" }[want]} to paste into.`,
-      );
-    link(c.type, c.id, target);
+    else if (ui.pane?.id && canParent(ui.pane.type, c.type))
+      target = ui.pane.id;
+    if (target) link(c.type, c.id, target);
+    else if (s?.id && LABEL[s.type])
+      toast(`A ${LABEL[c.type]} can't go under a ${LABEL[s.type]}.`);
+    else toast(`Select ${PASTE_INTO[c.type]} to paste into.`);
   } else if (
     (e.key === "Delete" || e.key === "Backspace") &&
     s &&
@@ -624,6 +650,13 @@ document.addEventListener("keydown", (e) => {
   }
 });
 
+// where a copied item can be pasted
+const PASTE_INTO = {
+  C: "an outcome list",
+  D: "a capability or an outcome list",
+  T: "a deliverable, capability, or outcome list",
+};
+
 // ---- Drag and drop (move) --------------------------------------------------------------------------
 let marker = null;
 function clearDrop() {
@@ -639,22 +672,33 @@ function dropTarget(e) {
   if (!d) return null;
   const zone = e.target.closest(`[data-drop="${d.type}"]`);
   if (zone) return { zone, parent: +zone.dataset.parent };
-  // Collapsed capability card accepts deliverables; deliverable note accepts tasks (appends).
-  const n = noteOf(e.target);
-  if (n && n.dataset.type === PARENT[d.type] && +n.dataset.id)
-    return { into: n, parent: +n.dataset.id };
+  // Otherwise the nearest card, note, or outcome list that can be its parent (appends to it), e.g. a
+  // collapsed capability card for a deliverable or task, a deliverable note for a task.
+  for (let n = noteOf(e.target); n; n = noteOf(n.parentElement))
+    if (canParent(n.dataset.type, d.type) && +n.dataset.id)
+      return { into: n, parent: +n.dataset.id };
+  return null;
+}
+// Last resort: anywhere in an outcome list adds a deliverable or task directly to the outcome.
+function laneTarget(e) {
+  const lane = e.target.closest("#board .lane"),
+    head = lane && $(":scope > .lane-head", lane);
+  if (ui.drag && head && canParent(head.dataset.type, ui.drag.type))
+    return +head.dataset.id && { into: lane, parent: +head.dataset.id };
   return null;
 }
 
-// Where a drag would land (find: dropTarget or the page's). Just below a list or card, e.g. under
-// its last note or in the gap before the next card, still counts as in it.
+// Where a drag would land (find: dropTarget or the page's; then the optional fallback). Just below a
+// list or card, e.g. under its last note or in the gap before the next card, still counts as in it.
 const FUZZ = 24; // px
-function landing(e, find) {
-  const t = find(e);
-  if (t) return t;
+function landing(e, find, fallback) {
   const above = document.elementFromPoint(e.clientX, e.clientY - FUZZ);
   return (
-    above && find({ target: above, clientX: e.clientX, clientY: e.clientY })
+    find(e) ||
+    (above &&
+      find({ target: above, clientX: e.clientX, clientY: e.clientY })) ||
+    fallback?.(e) ||
+    null
   );
 }
 
@@ -746,7 +790,7 @@ document.addEventListener("dragover", (e) => {
     }
     return;
   }
-  const t = landing(e, dropTarget);
+  const t = landing(e, dropTarget, laneTarget);
   clearDrop();
   if (!t) return;
   e.preventDefault();
@@ -795,7 +839,7 @@ document.addEventListener("drop", (e) => {
     }
     return;
   }
-  const t = landing(e, dropTarget),
+  const t = landing(e, dropTarget, laneTarget),
     d = ui.drag;
   if (!t || !d) return;
   e.preventDefault();
@@ -833,7 +877,7 @@ export function poolHTML(note, extra = "") {
   caps.push({
     id: 0,
     name: poolName("D"),
-    kids: kidsOf("D", 0),
+    kids: { D: kidsOf("D", 0), T: [] },
     parents: [],
     row: {},
   });

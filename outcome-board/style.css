@@ -235,6 +235,13 @@ input {
   margin-top: 8px;
   min-height: 8px;
 }
+/* tasks linked directly to a capability or outcome (rows like the sprints page's) */
+.trows {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+}
 
 /* Deliverable small note */
 .del {
