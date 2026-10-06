@@ -43,7 +43,7 @@ To run it against the real doc, use http://localhost:8000/index.html as the widg
 The pool, then one list per sprint: Planned and Active (tick "Show completed" for the rest), in start-date order
 until you drag a sprint's header to reorder. Each list holds what was added to that sprint (outcomes, capabilities,
 deliverables, and tasks as small rows), laid out like the pool; whatever is under an item comes with it.
-The header shows status, dates, and how many of the sprint's items (capabilities, deliverables, tasks) are done. Click it to edit the sprint
+The header shows status, dates, and a progress bar (share of effort done among items with nothing under them, or of the items if any has no effort; hover for the numbers). Click it to edit the sprint
 (name, status, dates, notes) or delete it (its items are kept). "+ Add sprint" adds one.
 
 - The pool starts with every item; "Hide planned" leaves out items already in a planned or active sprint.

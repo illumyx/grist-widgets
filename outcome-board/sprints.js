@@ -61,7 +61,13 @@ function sprintHTML(sp) {
     items = ["C", "D", "T"].flatMap((type) =>
       [...S[type].values()].filter((x) => x.own.has(sp.id) || x.via.has(sp.id)),
     ),
-    done = items.filter(doneOf).length,
+    // progress: done among the items with nothing under them (a parent's effort is its children's),
+    // weighted by effort when every one has an effort, else counted
+    leaves = items.filter((x) => !x.kids.length),
+    byEffort = leaves.every((x) => x.row[CFG.T.effort] != null),
+    weight = (x) => (byEffort ? x.row[CFG.T.effort] : 1),
+    total = leaves.reduce((n, x) => n + weight(x), 0),
+    done = leaves.filter(doneOf).reduce((n, x) => n + weight(x), 0),
     dates = [sp.row[CFG.SP.start], sp.row[CFG.SP.end]]
       .filter(Boolean)
       .map(day)
@@ -83,14 +89,15 @@ function sprintHTML(sp) {
         .filter(matches)
         .map((t) => taskHTML(t, sp))
         .join("");
-  const sub = [
-    sp.status,
-    dates,
-    items.length ? `${done}/${items.length} items done` : "",
-  ].filter(Boolean);
+  const sub = [sp.status, dates].filter(Boolean),
+    pct = Math.round((100 * done) / total),
+    num = (n) => Math.round(n * 10) / 10,
+    progress = total
+      ? `<span class="progress" title="${num(done)}/${num(total)}"><span class="bar"><span style="width:${pct}%"></span></span>${pct}%</span>`
+      : "";
   return `<section class="lane sprint" style="--sp:${sp.color}">
     <div class="lane-head${paneIs("SP", sp.id) ? " open" : ""}" tabindex="0" data-type="SP" data-id="${sp.id}" data-parent="0" draggable="true" title="Drag to reorder">${esc(sp.name)}
-      <span class="sub">${sub.map(esc).join(" · ")}</span></div>
+      <span class="sub">${sub.map(esc).join(" · ")}</span>${progress}</div>
     <div class="lane-body">${body || `<div class="empty">Nothing in this sprint yet.</div>`}</div></section>`;
 }
 

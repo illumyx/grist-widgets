@@ -530,6 +530,27 @@ textarea.title:focus {
   box-shadow: inset 0 0 0 1.5px var(--sp);
   color: var(--muted);
 }
+.progress {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--muted);
+}
+.progress .bar {
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+}
+.progress .bar span {
+  display: block;
+  height: 100%;
+  background: var(--sp);
+}
 .lane-head .sp {
   margin: 4px 4px 0 0;
 }
