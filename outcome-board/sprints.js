@@ -62,9 +62,9 @@ function sprintHTML(sp) {
       [...S[type].values()].filter((x) => x.own.has(sp.id) || x.via.has(sp.id)),
     ),
     // progress: done among the items with nothing under them (a parent's effort is its children's),
-    // weighted by effort when every one has an effort, else counted
+    // weighted by effort when every one has an effort (a blank one reads as 0), else counted
     leaves = items.filter((x) => !x.kids.length),
-    byEffort = leaves.every((x) => x.row[CFG.T.effort] != null),
+    byEffort = leaves.every((x) => x.row[CFG.T.effort] > 0),
     weight = (x) => (byEffort ? x.row[CFG.T.effort] : 1),
     total = leaves.reduce((n, x) => n + weight(x), 0),
     done = leaves.filter(doneOf).reduce((n, x) => n + weight(x), 0),
