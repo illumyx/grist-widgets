@@ -733,8 +733,9 @@ document.addEventListener("dragover", (e) => {
     $("#board").insertBefore(marker, before || $("#board .add-lane"));
     return;
   }
-  if (page.dropTarget) {
-    // this page decides where items can land (the sprints page)
+  if (page.dropTarget && !e.target.closest("#pane")) {
+    // this page decides where items can land on the board (the sprints page); the side pane
+    // always works as usual (reorder tasks, move them between deliverables)
     const t = landing(e, page.dropTarget);
     clearDrop();
     if (t) {
@@ -794,7 +795,7 @@ document.addEventListener("drop", (e) => {
     ]);
     return;
   }
-  if (page.dropTarget) {
+  if (page.dropTarget && !e.target.closest("#pane")) {
     const t = landing(e, page.dropTarget),
       d = ui.drag;
     clearDrop();
