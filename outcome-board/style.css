@@ -158,13 +158,6 @@ input {
   padding: 8px 10px 8px;
   cursor: grab;
 }
-.cap.special {
-  background: #f4f6f8;
-  border-bottom-color: #c9d1d8;
-  box-shadow: none;
-  border: 1px dashed #aab5bf;
-  cursor: default;
-}
 .cap-title {
   font-weight: 700;
   line-height: 1.3;
@@ -304,11 +297,6 @@ input {
 .lane-head.open {
   box-shadow: 0 0 0 2px var(--select);
 }
-.del.orphan {
-  font-style: italic;
-  color: var(--muted);
-  border-left-color: transparent;
-}
 
 .selected {
   outline: 2px solid var(--select);
@@ -372,11 +360,6 @@ body.pane-open .toolbar {
   padding: 14px 16px 10px;
   border-bottom: 1px solid #e3e7eb;
   position: relative;
-}
-.pane-head h2 {
-  font-size: 16px;
-  margin: 0 28px 6px 0;
-  line-height: 1.3;
 }
 .pane-head .x {
   opacity: 1;

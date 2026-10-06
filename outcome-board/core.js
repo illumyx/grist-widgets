@@ -151,6 +151,7 @@ export const ui = {
   pane: null,
   drag: null,
   busy: false,
+  adding: null, // the open "+ Add item" box: {key, parent, sprint, type, text}
   draft: null, // name being typed in place: {type, parent, text} for a new record (plus fields: extra
   // columns to set; a new sprint also has forType/forId, the item whose menu it replaced), or with id
   // to rename a task
@@ -322,9 +323,6 @@ const setKids = (type, parent, list) => [
   },
 ];
 export const nameOf = (id) => (id ? S.all.get(id)?.name : "the pool");
-// names of the pool's stand-in notes for deliverables and tasks
-export const poolName = (type) =>
-  `${ui.showAll ? "All" : "Unlinked"} ${PLURAL[type]}`;
 
 // Put items of one level (or sprints) in this row order (manualSort), reusing their current positions
 // so that other rows keep theirs.

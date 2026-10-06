@@ -16,9 +16,13 @@ and clicking a deliverable opens its task checklist. Every link is many-to-many.
 - × on a note (or the Delete key) removes that one link; the record itself stays.
 - To delete a record, use Delete at the bottom of its side pane (or the trash icon on a task). You can
   also delete what's linked only under it; anything also linked elsewhere is kept.
-- The Pool (first list) holds unlinked capabilities, deliverables, and tasks; untick "Hide linked" to see all of them.
-  Dragging from the pool adds a link; dragging into it unlinks. Pool items can be dragged into any order
-  (saved as the table's row order).
+- The Pool (first list) holds unlinked capabilities, then deliverables, then tasks, laid out like an outcome list;
+  untick "Hide linked" to see all of them. Dragging from the pool adds a link; dragging into it unlinks. Pool items
+  can be dragged into any order (saved as the table's row order).
+- "+ Add item" (at the bottom of an outcome list, an expanded capability, the pool, or a sprint) adds a new item
+  there: pick its type with the chips (or Alt+O/C/D/T; it remembers the last one), type a name, Enter. The box
+  stays open for the next one; Esc closes it, and so does clicking away (adding what was typed).
+- Clicking a task with no parent opens its own side pane (type, status, urgency, effort, assigned, sprints).
 - Keys: arrows move between notes (up/down within a list or the task list, left/right across lists);
   Space expands a capability or opens/closes a deliverable's side pane; Enter opens the side pane.
 - ×N means the note appears in N places; hovering outlines the other copies.
@@ -67,10 +71,7 @@ The header shows status, dates, and a progress bar (share of effort done among i
   among the others of its kind (outcomes, capabilities, deliverables, tasks stay in that order).
 - x (or Delete) on an item in a sprint takes it out. Items that are only there through a parent have no x.
 - Ctrl/Cmd+C an item, select a sprint, Ctrl/Cmd+V adds it.
-- "+ Add item" at the bottom of a sprint adds a new item (with no parent) to it: pick its type with the chips
-  (or Alt+O/C/D/T; it remembers the last one), type a name, Enter. The box stays open for the next one;
-  Esc closes it, and so does clicking away (adding what was typed).
-- Clicking a task with no parent opens its own side pane (type, status, urgency, effort, assigned, sprints).
+- "+ Add item" at the bottom of a sprint adds a new item (with no parent) to it.
 
 ## Add it in Grist
 

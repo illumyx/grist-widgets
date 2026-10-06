@@ -25,7 +25,6 @@ import {
   ui,
   kidsOf,
   nameOf,
-  poolName,
   render,
   NOT_STARTED,
   TYPES,
@@ -123,19 +122,54 @@ const confirming = (type, id) =>
 const draftHTML = (label, text = "") =>
   `<textarea class="draft" rows="1" placeholder="New ${label}" aria-label="Name">${esc(text)}</textarea>`;
 export function addHTML(type, parent) {
-  // "+ Add ..." button, or the new note being named in its place
+  // "+ Add ..." button for a list (an outcome or sprint), or the new list being named in its place
   const d = ui.draft;
-  if (d && !d.id && d.type === type && d.parent === parent) {
-    const box = draftHTML(LABEL[type], d.text);
-    return {
-      O: `<section class="lane"><div class="lane-head">${box}</div></section>`,
-      SP: `<section class="lane"><div class="lane-head">${box}</div></section>`,
-      C: `<div class="cap">${box}</div>`,
-      D: `<div class="del">${box}</div>`,
-    }[type];
-  }
-  return `<button class="${LANES.includes(type) ? "add-lane" : "add"}" data-add="${type}" data-parent="${parent}">+ Add ${LABEL[type]}</button>`;
+  if (d && !d.id && d.type === type && d.parent === parent)
+    return `<section class="lane"><div class="lane-head">${draftHTML(LABEL[type], d.text)}</div></section>`;
+  return `<button class="add-lane" data-add="${type}" data-parent="${parent}">+ Add ${LABEL[type]}</button>`;
 }
+
+// "+ Add item": a name box with a chip for each level the new item can be (types). Enter adds it under
+// parent (0: none), and to sprint if given, and leaves the box open for the next one; Esc closes it,
+// and so does clicking away (adding what was typed). key tells boxes apart (a capability's copies
+// share its id). The chip picked is the last one picked, if types has it, else first (or types[0]).
+let lastType = null;
+export function addItemHTML(key, types, parent, sprint = 0, first = types[0]) {
+  const a = ui.adding;
+  if (a?.key !== key)
+    return `<button class="add" data-additem="${key}" data-types="${types.join("")}" data-first="${first}" data-parent="${parent}" data-sprint="${sprint}">+ Add item</button>`;
+  const chips = types
+    .map(
+      (k) =>
+        `<button type="button" class="type-chip" tabindex="-1" data-addtype="${k}" aria-pressed="${k === a.type}">${TYPES[k]}</button>`,
+    )
+    .join("");
+  return `<form class="additem"><div class="type-chips">${chips}</div>
+    <input type="text" value="${esc(a.text)}" placeholder="Name, then Enter" title="Alt+O/C/D/T picks the type" aria-label="New item"></form>`;
+}
+function addItem({ type, text, parent, sprint }) {
+  const name = text.trim();
+  if (!name) return;
+  act(
+    [
+      addAction(
+        type,
+        name,
+        parent,
+        sprint ? { [CFG.I.sprints]: ["L", sprint] } : {},
+      ),
+    ],
+    `Added “${name}”.`,
+  );
+}
+function pickType(k) {
+  if (!$(`.additem [data-addtype="${k}"]`)) return; // not a level this box can add
+  ui.adding.type = lastType = k;
+  document
+    .querySelectorAll("[data-addtype]")
+    .forEach((b) => b.setAttribute("aria-pressed", b.dataset.addtype === k));
+}
+const TYPE_KEYS = { KeyO: "O", KeyC: "C", KeyD: "D", KeyT: "T" }; // Alt+O/C/D/T picks the level
 
 // Sprint pills: an item's own sprints, then faded ones it inherits from a parent. Completed
 // sprints aren't shown. With removable, own pills get an x (the side pane).
@@ -208,16 +242,12 @@ export function directTasksHTML(p, xTitle) {
 }
 
 export function capHTML(c, out, xTitle = "Remove from this outcome") {
-  const special = c.id === 0;
   const dels = c.kids.D.map((d) => S.D.get(d)).filter(visible);
   const shown = dels.filter(hit);
   const ownT = c.kids.T.map((t) => S.T.get(t)).filter(visible);
-  const orphanT = special ? kidsOf("T", 0) : [];
-  const orphanHit = taskHit(orphanT);
   const filtering = q() && !matches(c); // card is only here for its matching deliverables/tasks
-  if (filtering && !shown.length && !orphanHit && !ownT.some(matches))
-    return "";
-  const cst = special ? "" : c.row[CFG.I.status] || "";
+  if (filtering && !shown.length && !ownT.some(matches)) return "";
+  const cst = c.row[CFG.I.status] || "";
   if (hideDone() && cst === DONE) return "";
   const open = ui.expanded.has(ekey(out, c.id)) || !!filtering;
   const list = filtering ? shown : dels;
@@ -225,39 +255,28 @@ export function capHTML(c, out, xTitle = "Remove from this outcome") {
     .filter((d) => !doneOf(d))
     .map((d) => d.row[CFG.I.urgency])
     .sort((x, y) => urgRank(y) - urgRank(x))[0];
-  return `<div class="cap${special ? " special" : ""}${paneIs("C", c.id) && !special ? " open" : ""}" ${special ? "" : 'draggable="true"'} tabindex="0" data-type="C" data-id="${c.id}" data-parent="${out}"${urgAttr(urg)}>
+  return `<div class="cap${paneIs("C", c.id) ? " open" : ""}" draggable="true" tabindex="0" data-type="C" data-id="${c.id}" data-parent="${out}"${urgAttr(urg)}>
     <div class="cap-title"><button class="chev" data-toggle aria-expanded="${open}" aria-label="${open ? "Collapse" : "Expand"}">${open ? "▾" : "▸"}</button>${esc(c.name)}</div>
-    ${special ? "" : copies(c)}
-    <div class="meta"><span>${plural(dels.length, "D")}</span>${ownT.length ? `<span>${plural(ownT.length, "T")}</span>` : ""}${special ? "" : optHTML(out, c.id)}
+    ${copies(c)}
+    <div class="meta"><span>${plural(dels.length, "D")}</span>${ownT.length ? `<span>${plural(ownT.length, "T")}</span>` : ""}${optHTML(out, c.id)}
 
       ${cst ? `<span class="pill${cst === DONE ? " ok" : ""}">${cst === DONE ? "✓ Available" : esc(cst)}</span>` : ""}
-      ${c.row?.[CFG.I.proposed] ? `<span class="pill">${esc(c.row[CFG.I.proposed])}</span>` : ""}${special ? "" : whoHTML(c)}${pills(c)}</div>
-    ${special ? "" : metrics(c)}
+      ${c.row[CFG.I.proposed] ? `<span class="pill">${esc(c.row[CFG.I.proposed])}</span>` : ""}${whoHTML(c)}${pills(c)}</div>
+    ${metrics(c)}
     ${
       open
-        ? `<div class="dels" data-drop="D" data-parent="${special ? 0 : c.id}">${list.map((d) => delHTML(d, special ? 0 : c.id)).join("")}
-      ${orphanT.length && (!filtering || orphanHit) ? `<div class="del orphan${paneIs("D", 0) ? " open" : ""}" tabindex="0" data-type="D" data-id="0" data-parent="0">${poolName("T")} (${orphanT.length})</div>` : ""}
-      ${special ? "" : addHTML("D", c.id)}</div>
-      ${special ? "" : directTasksHTML(c, "Remove from this capability")}`
+        ? `<div class="dels" data-drop="D" data-parent="${c.id}">${list.map((d) => delHTML(d, c.id)).join("")}</div>
+      ${directTasksHTML(c, "Remove from this capability")}
+      ${addItemHTML(`cap${ekey(out, c.id)}`, ["D", "T"], c.id)}`
         : ""
     }
-    ${out && !special ? `<button class="x" data-unlink title="${xTitle}" aria-label="${xTitle}">×</button>` : ""}</div>`;
+    ${out ? `<button class="x" data-unlink title="${xTitle}" aria-label="${xTitle}">×</button>` : ""}</div>`;
 }
 
 function renderPane() {
   const pane = $("#pane"),
     p = ui.pane;
-  const x = !p
-    ? null
-    : p.type === "D" && p.id === 0
-      ? {
-          id: 0,
-          name: poolName("T"),
-          kids: { T: kidsOf("T", 0) },
-          parents: [],
-          row: {},
-        }
-      : S[p.type].get(p.id);
+  const x = p && S[p.type].get(p.id);
   document.body.classList.toggle("pane-open", !!x);
   if (!x) {
     pane.hidden = true;
@@ -313,12 +332,12 @@ function renderPane() {
   const sum = [measure(x, "Impact"), measure(x, "Effort")]
     .filter(Boolean)
     .join(" · ");
-  let html = `<div class="pane-head"><div class="kind">${LABEL[L]}</div>${x.id ? `<textarea class="title" data-field="${cfg.name}" rows="1" aria-label="Name">${esc(x.row[cfg.name] ?? "")}</textarea>` : `<h2>${esc(x.name)}</h2>`}
+  let html = `<div class="pane-head"><div class="kind">${LABEL[L]}</div><textarea class="title" data-field="${cfg.name}" rows="1" aria-label="Name">${esc(x.row[cfg.name] ?? "")}</textarea>
       <button class="x" data-close aria-label="Close">×</button>
       ${x.parents.length ? `<div class="chips">${x.parents.map(chip).join("")}</div>` : ""}
       ${L !== "O" && sum ? `<div class="summary">${sum}</div>` : ""}
-      ${x.id && FIELDS[L] ? `<div class="fields">${L === "SP" ? "" : typeField()}${FIELDS[L].map(field).join("")}${L === "SP" ? "" : peopleField()}</div>` : ""}
-      ${x.id && S.hasSprints && L !== "SP" ? sprintsHTML(L, x) : ""}
+      ${FIELDS[L] ? `<div class="fields">${L === "SP" ? "" : typeField()}${FIELDS[L].map(field).join("")}${L === "SP" ? "" : peopleField()}</div>` : ""}
+      ${S.hasSprints && L !== "SP" ? sprintsHTML(L, x) : ""}
       ${note ? `<div class="pane-note">${esc(note)}</div>` : ""}</div>`;
   if (L !== "SP" && L !== "T") {
     // the task checklist: a deliverable's tasks, or a capability's or outcome's direct ones (if any)
@@ -338,15 +357,13 @@ function renderPane() {
         <input class="teff" type="number" step="any" data-teffort value="${esc(num(t.row[CFG.I.effortEstimate]) ?? "")}" placeholder="effort" aria-label="Effort">
         <span class="tsprints">${assignMenu(t)}${S.hasSprints ? sprintMenu("T", t) + pills(t, true) : ""}</span>
         <button class="trash" data-delete title="Delete task" aria-label="Delete task">${TRASH}</button>
-        ${copies(t)}${x.id ? `<button class="x" data-unlink title="Remove from this ${LABEL[L]}" aria-label="Remove from this ${LABEL[L]}">×</button>` : ""}</div>`;
+        ${copies(t)}<button class="x" data-unlink title="Remove from this ${LABEL[L]}" aria-label="Remove from this ${LABEL[L]}">×</button></div>`;
           })
           .join("") || `<div class="empty">No tasks yet.</div>`
       }</div>`;
-    if (x.id)
-      html += `<form data-addtask><input type="text" placeholder="Add a task and press Enter" aria-label="New task"></form>`;
+    html += `<form data-addtask><input type="text" placeholder="Add a task and press Enter" aria-label="New task"></form>`;
   }
-  if (x.id)
-    html += `<div class="pane-foot">${confirming(L, x.id) ? confirmHTML(ui.confirm) : `<button class="danger-link" data-delete>Delete ${LABEL[L]}</button>`}</div>`;
+  html += `<div class="pane-foot">${confirming(L, x.id) ? confirmHTML(ui.confirm) : `<button class="danger-link" data-delete>Delete ${LABEL[L]}</button>`}</div>`;
   // keep the task list's scroll position when redrawing the same item (refreshes, edits)
   const key = `${L}:${x.id}`,
     top = pane.dataset.key === key ? $(".tasks", pane)?.scrollTop : 0;
@@ -452,7 +469,19 @@ document.addEventListener("click", (e) => {
       false,
     );
   if (t.closest(".pane-head, .teff")) return;
-  if (t.closest(".draft")) return;
+  if (t.closest(".draft, .additem")) return;
+  if (t.closest("[data-additem]")) {
+    const b = t.closest("[data-additem]").dataset,
+      types = [...b.types];
+    ui.adding = {
+      key: b.additem,
+      parent: +b.parent,
+      sprint: +b.sprint,
+      type: types.includes(lastType) ? lastType : b.first,
+      text: "",
+    };
+    return render();
+  }
   if (t.closest("[data-add]")) {
     const b = t.closest("[data-add]");
     ui.draft = {
@@ -488,10 +517,7 @@ document.addEventListener("click", (e) => {
   if (note) {
     select(note);
     const s = selOf(note);
-    if (s.type === "C" && s.id === 0) {
-      ui.expanded.add(ekey(0, 0));
-      render();
-    } else if (s.type !== "T" && (s.id || s.type === "D")) {
+    if (s.type !== "T" && s.id) {
       ui.pane = { type: s.type, id: s.id };
       ui.confirm = null;
       render();
@@ -607,6 +633,48 @@ document.addEventListener("submit", (e) => {
   act([addAction("T", name, ui.pane.id)]).then(() =>
     $("#pane form input")?.focus(),
   );
+});
+
+// "+ Add item" box (see addItemHTML)
+document.addEventListener("mousedown", (e) => {
+  const chip = e.target.closest("[data-addtype]");
+  if (!chip) return;
+  e.preventDefault(); // keep the focus (and the box open) in the name box
+  pickType(chip.dataset.addtype);
+});
+document.addEventListener("submit", (e) => {
+  if (!e.target.matches(".additem")) return;
+  e.preventDefault();
+  addItem(ui.adding);
+  ui.adding.text = "";
+  $(".additem input").value = "";
+});
+document.addEventListener("input", (e) => {
+  if (e.target.matches(".additem input")) ui.adding.text = e.target.value;
+});
+document.addEventListener("keydown", (e) => {
+  if (!e.target.matches(".additem input")) return;
+  if (e.key === "Escape") {
+    ui.adding = null;
+    render();
+  } else if (e.altKey && TYPE_KEYS[e.code]) {
+    e.preventDefault();
+    pickType(TYPE_KEYS[e.code]);
+  }
+});
+document.addEventListener("focusout", (e) => {
+  // clicking away closes the box; switching to another window, or a redraw, keeps it open
+  if (
+    !e.target.matches(".additem input") ||
+    !ui.adding ||
+    drawing ||
+    !document.hasFocus()
+  )
+    return;
+  const was = ui.adding;
+  ui.adding = null;
+  addItem(was);
+  setTimeout(render); // after the click that moved the focus lands on what it clicked
 });
 
 // Hovering a note outlines its other copies.
@@ -735,12 +803,13 @@ function dropTarget(e) {
       return { into: n, parent: +n.dataset.id };
   return null;
 }
-// Last resort: anywhere in an outcome list adds a deliverable or task directly to the outcome.
+// Last resort: anywhere in an outcome list adds a deliverable or task directly to the outcome (in
+// the pool, unlinks it).
 function laneTarget(e) {
   const lane = e.target.closest("#board .lane"),
     head = lane && $(":scope > .lane-head", lane);
   if (ui.drag && head && canParent(head.dataset.type, ui.drag.type))
-    return +head.dataset.id && { into: lane, parent: +head.dataset.id };
+    return { into: lane, parent: +head.dataset.id };
   return null;
 }
 
@@ -800,7 +869,6 @@ document.addEventListener("dragstart", (e) => {
 
 // Lists (outcomes on the board, sprints on the sprints page) reorder left/right; the order is saved
 // in their table's row order (manualSort).
-const LANES = ["O", "SP"];
 function laneSlot(e) {
   const lanes = [...document.querySelectorAll("#board .lane")].filter(
     (l) =>
@@ -866,7 +934,7 @@ document.addEventListener("dragover", (e) => {
   marker.className = "drop-marker";
   t.zone.insertBefore(
     marker,
-    before || t.zone.querySelector(":scope > .add") || null,
+    before || t.zone.querySelector(":scope > .add, :scope > .additem") || null,
   );
 });
 
@@ -925,31 +993,34 @@ document.addEventListener("dragend", () => {
     .forEach((x) => x.classList.remove("dragging"));
 });
 
-// The pool list: capabilities, then a stand-in card holding the pool's deliverables (and, under it,
-// its tasks). note: the hint under the title; extra: more header checkboxes.
+// The pool list: capabilities, then deliverables and tasks, like an outcome list's. note: the hint under
+// the title; extra: more header checkboxes.
 export function poolHTML(note, extra = "") {
   if (hidePool()) return "";
-  const caps = kidsOf("C", 0).map((c) => S.C.get(c));
-  caps.push({
-    id: 0,
-    name: poolName("D"),
-    kids: { D: kidsOf("D", 0), T: [] },
-    parents: [],
-    row: {},
-  });
+  const tasks = kidsOf("T", 0)
+    .map((t) => S.T.get(t))
+    .filter(visible)
+    .filter(matches); // (unlike a card's own tasks, which show with their card)
   return `<section class="lane unlinked">
     <div class="lane-head" tabindex="0" data-type="O" data-id="0" data-parent="0">Pool
       <span class="sub">${note} <label class="toggle"><input type="checkbox" data-hidelinked${ui.showAll ? "" : " checked"}> Hide linked</label>${extra}</span></div>
-    <div class="lane-body" data-drop="C" data-parent="0">${caps.map((c) => capHTML(c, 0)).join("")}
-      ${addHTML("C", 0)}</div></section>`;
+    <div class="lane-body" data-drop="C" data-parent="0">${kidsOf("C", 0)
+      .map((c) => capHTML(S.C.get(c), 0))
+      .join("")}
+      ${directDelsHTML({ id: 0, kids: { D: kidsOf("D", 0) } })}
+      ${tasks.length ? `<div class="trows" data-drop="T" data-parent="0">${tasks.map((t) => trowHTML(t, 0)).join("")}</div>` : ""}
+      ${addItemHTML("pool", ["C", "D", "T"], 0)}</div></section>`;
 }
 
 // Draw a page's lists into #board, keeping each list's and the board's scroll position.
+let drawing = false; // redrawing (which takes the focus out of the "+ Add item" box)
 export function drawBoard(html) {
   const board = $("#board"),
     scroll = [...board.querySelectorAll(".lane-body")].map((e) => e.scrollTop),
     left = board.scrollLeft;
+  drawing = true;
   board.innerHTML = html;
+  drawing = false;
   board
     .querySelectorAll(".lane-body")
     .forEach((e, i) => (e.scrollTop = scroll[i] || 0));
@@ -972,6 +1043,11 @@ function afterRender() {
     grow(draft);
     draft.focus();
     draft.setSelectionRange(draft.value.length, draft.value.length);
+  }
+  const box = $(".additem input"); // keep typing in the add box across redraws
+  if (box && document.activeElement !== box) {
+    box.focus();
+    box.setSelectionRange(box.value.length, box.value.length);
   }
 }
 

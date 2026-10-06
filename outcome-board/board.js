@@ -3,6 +3,7 @@
 import { start, CFG, esc, S, page, plural } from "./core.js";
 import {
   addHTML,
+  addItemHTML,
   capHTML,
   directDelsHTML,
   directTasksHTML,
@@ -27,7 +28,7 @@ function laneHTML(o) {
       <span class="sub">${counts}${imp !== null && imp !== undefined ? ` · impact ${imp}` : ""}</span>${whoHTML(o)}${pills(o)}</div>
     <div class="lane-body" data-drop="C" data-parent="${o.id}">${o.kids.C.map((c) => capHTML(S.C.get(c), o.id)).join("")}
       ${directDelsHTML(o, "Remove from this outcome")}${directTasksHTML(o, "Remove from this outcome")}
-      ${addHTML("C", o.id)}</div></section>`;
+      ${addItemHTML(`O${o.id}`, ["C", "D", "T"], o.id)}</div></section>`;
 }
 
 page.render = () =>
