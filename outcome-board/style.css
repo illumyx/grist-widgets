@@ -904,6 +904,10 @@ textarea.title:focus {
 .del > .due {
   font-size: 12px;
 }
+.trow > .due {
+  font-weight: 700;
+  color: var(--muted);
+}
 .due.late {
   color: var(--danger);
   font-weight: 700;
