@@ -24,6 +24,10 @@ export const CFG = {
     note: "Review_Note",
     proposed: "Proposed_By",
     sprints: "Sprints", // two-way with Sprints.Items
+    // when it's due: by a date, from a date (the earliest it could be), and/or a note ("Ongoing")
+    targetDate: "Target_Date",
+    targetFrom: "Target_From",
+    targetNote: "Target_Note",
   },
   // Sprints.Items lists the sprint's items (two-way with Items.Sprints); membership is written here.
   SP: {
@@ -59,7 +63,6 @@ const SPRINT_STATUSES = ["Planned", "Active", "Completed"];
 export const FIELDS = {
   O: [
     ["Status", "Status", STATUSES],
-    ["Target_Date", "Target date", "date"],
     ["Impact_Estimate", "Impact", "number"],
   ],
   C: [
@@ -85,6 +88,12 @@ export const FIELDS = {
     ["Notes", "Notes", "text"],
   ],
 };
+// every item's due date fields, shown in their own rows in the side pane
+export const DUE_FIELDS = [
+  ["Target_From", "Due from", "date"],
+  ["Target_Date", "Due by", "date"],
+  ["Target_Note", "Timing note", "text"],
+];
 export const URGENCY = ["", "Elevated", "High"]; // blank = normal
 export const SPRINT_DONE = "Completed"; // other sprint statuses: Planned (or blank), Active
 const SPRINT_COLORS = [

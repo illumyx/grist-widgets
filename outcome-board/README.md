@@ -28,7 +28,7 @@ and clicking a deliverable opens its task checklist. Every link is many-to-many.
 - ×N means the note appears in N places; hovering outlines the other copies.
 - Capabilities have a status (Not Started / In Progress / Review / Done); a done one shows as "Available", and "Hide done" hides it (and done outcome lists).
 - Click an outcome header, capability, or deliverable to open its details in the side pane: type, status, urgency,
-  an outcome's target date, and impact/effort estimates. "~8" means the number is an estimate; plain "8" is rolled up from linked items.
+  impact/effort estimates, and when it's due. "~8" means the number is an estimate; plain "8" is rolled up from linked items.
 - The side pane's Type changes an item's level (e.g. a deliverable into a task). Levels it can't take are
   greyed out: it must stay below all of its parents and above all of its children.
 - Each parent chip in the side pane has an "optional" box: ticked, that link is optional (the item gets
@@ -42,6 +42,10 @@ and clicking a deliverable opens its task checklist. Every link is many-to-many.
 - Yellow/red banners show Elevated/High urgency; a capability shows the highest urgency among its open deliverables.
 - The filter matches capability, deliverable, and task names; matching tasks are highlighted in the side pane.
 - The pool stays in place while the other lists scroll sideways; "Hide pool" hides it (on both pages).
+- When it's due (side pane): "Due by" a date, "Due from" the earliest it could be due (a range with both; on
+  its own, open-ended), and a "Timing note" for timing that isn't a date ("Ongoing", "By cohort 3"). Cards, notes,
+  rows, and outcome headers show e.g. "Due Nov 10", "Due Oct 2026", "Due Dec 2026 - Jan 2027", "Due Mar 2027 or
+  later" (whole months show as months), plus the note; red once the due-by day has passed and it isn't done.
 - Sprints (once `bin/extend_schema.py` has added the Sprints table): colored pills show an item's sprints;
   an outlined pill means it's inherited from a parent (everything under an item in a sprint is in it too).
   The side pane's Sprints row adds the item to a sprint (or a new one) and x takes it out; each task row in
@@ -66,6 +70,7 @@ The header shows status, dates, and a progress bar (share of effort done among i
 (name, status, dates, notes) or delete it (its items are kept). "+ Add sprint" adds one.
 
 - The pool starts with every item; "Hide planned" leaves out items already in a planned or active sprint.
+- "Hide done" starts ticked here, and notes don't show sprint pills (the list they're in says which sprint).
 - Drag from the pool into a sprint to add an item; from one sprint to another to move it; back to the pool to
   take it out. Tasks can be dragged from the side pane. Within a sprint, drag an item up or down to reorder it
   among the others of its kind (outcomes, capabilities, deliverables, tasks stay in that order).

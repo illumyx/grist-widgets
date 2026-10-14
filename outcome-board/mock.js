@@ -15,6 +15,8 @@
         Type: "Outcome",
         Item: "Sample client runs a survey in the portal",
         Children: [2, 3],
+        Target_From: 1796083200, // Dec 2026 - Jan 2027
+        Target_Date: 1801353600,
       },
       {
         id: 2,
@@ -54,6 +56,7 @@
         Type: "Deliverable",
         Item: "Error alerts to Slack",
         Status: "Not Started",
+        Target_Date: 1789948800, // overdue (Sep 21, 2026)
         Children: [],
       },
       {
@@ -63,7 +66,13 @@
         Status: "Done",
         Assignees: ["DR"],
       },
-      { id: 9, Type: "Task", Item: "Build page", Status: "Not Started" },
+      {
+        id: 9,
+        Type: "Task",
+        Item: "Build page",
+        Status: "Not Started",
+        Target_Note: "Before the pilot",
+      },
       { id: 10, Type: "Task", Item: "Draft copy", Status: "Not Started" },
     ],
     // Start/End are Grist dates: seconds since 1970 (UTC midnight)

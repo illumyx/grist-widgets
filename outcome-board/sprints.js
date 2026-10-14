@@ -25,8 +25,10 @@ import {
   addHTML,
   addItemHTML,
   capHTML,
+  day,
   delHTML,
   drawBoard,
+  dueHTML,
   paneIs,
   doneOf,
   visible,
@@ -41,16 +43,9 @@ let showCompleted = false;
 const X = "Remove from this sprint",
   xButton = `<button class="x" data-unlink title="${X}" aria-label="${X}">×</button>`;
 
-const day = (sec) =>
-  new Date(sec * 1000).toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-    timeZone: "UTC",
-  });
-
 const outcomeHTML = (o, sp) =>
   `<div class="ocard${paneIs("O", o.id) ? " open" : ""}" draggable="true" tabindex="0" data-type="O" data-id="${o.id}" data-parent="${sp.id}">${esc(o.name)}
-    <div class="meta"><span>${plural(o.kids.C.length, "C")}</span></div>${xButton}</div>`;
+    <div class="meta"><span>${plural(o.kids.C.length, "C")}</span>${dueHTML(o)}</div>${xButton}</div>`;
 
 function sprintHTML(sp) {
   const k = sp.kids,

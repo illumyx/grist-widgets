@@ -14,6 +14,7 @@ import {
   toast,
   CFG,
   FIELDS,
+  DUE_FIELDS,
   URGENCY,
   canParent,
   LABEL,
@@ -80,6 +81,46 @@ const metrics = (x) => {
     ? `<div class="metrics">${m.join('<span class="dot">·</span>')}</div>`
     : "";
 };
+// Dates (Grist stores seconds since 1970, UTC midnight): "Nov 10" (with the year if it isn't this
+// year's), or a whole month, "Oct 2026"
+const DAY = 86400;
+const utc = (sec) => new Date(sec * 1000);
+const dateText = (sec, opts) =>
+  utc(sec).toLocaleDateString(undefined, { timeZone: "UTC", ...opts });
+export const day = (sec) =>
+  dateText(sec, {
+    month: "short",
+    day: "numeric",
+    ...(utc(sec).getUTCFullYear() !== new Date().getFullYear()
+      ? { year: "numeric" }
+      : {}),
+  });
+const month = (sec) => dateText(sec, { month: "short", year: "numeric" });
+const firstOfMonth = (sec) => utc(sec).getUTCDate() === 1;
+const lastOfMonth = (sec) => utc(sec + DAY).getUTCDate() === 1;
+// When an item is due: "Due Nov 10", "Due Oct 2026", "Due Dec 2026 - Jan 2027", "Due Mar 2027 or
+// later", and/or its timing note. Red once the due-by day has passed, unless it's done.
+export function dueHTML(x) {
+  const from = num(x.row[CFG.I.targetFrom]),
+    by = num(x.row[CFG.I.targetDate]),
+    note = x.row[CFG.I.targetNote];
+  let when = "";
+  if (from && by)
+    when =
+      firstOfMonth(from) && lastOfMonth(by)
+        ? [...new Set([month(from), month(by)])].join(" - ")
+        : `${day(from)} - ${day(by)}`;
+  else if (by) when = day(by);
+  else if (from)
+    when = `${firstOfMonth(from) ? month(from) : day(from)} or later`;
+  const text = [when && `Due ${when}`, note && (when ? `(${note})` : note)]
+    .filter(Boolean)
+    .join(" ");
+  const late = by && !doneOf(x) && by + DAY <= Date.now() / 1000;
+  return text
+    ? `<span class="due${late ? " late" : ""}"${late ? ' title="Overdue"' : ""}>${esc(text)}</span>`
+    : "";
+}
 // the initials of the people an item is assigned to
 export const whoHTML = (x) =>
   assigneesOf(x)
@@ -215,7 +256,7 @@ export function delHTML(d, cap, xTitle = "Remove from this capability") {
   const st = d.row[CFG.I.status] || "";
   return `<div class="del${paneIs("D", d.id) ? " open" : ""}" draggable="true" tabindex="0" data-type="D" data-id="${d.id}" data-parent="${cap}" data-status="${esc(st)}"${urgAttr(d.row[CFG.I.urgency])}>
     ${esc(d.name)}${copies(d)}
-    <div class="meta">${tasks.length ? `<span>${done}/${tasks.length} tasks</span>` : ""}${st ? `<span>${esc(st)}</span>` : ""}${optHTML(cap, d.id)}${whoHTML(d)}${pills(d)}</div>${metrics(d)}
+    <div class="meta">${tasks.length ? `<span>${done}/${tasks.length} tasks</span>` : ""}${st ? `<span>${esc(st)}</span>` : ""}${dueHTML(d)}${optHTML(cap, d.id)}${whoHTML(d)}${pills(d)}</div>${metrics(d)}
     ${cap ? `<button class="x" data-unlink title="${xTitle}" aria-label="${xTitle}">×</button>` : ""}</div>`;
 }
 
@@ -223,7 +264,7 @@ export function delHTML(d, cap, xTitle = "Remove from this capability") {
 // opens its parent's side pane (its own, if it has no parent).
 export const trowHTML = (t, parent, xTitle) =>
   `<div class="trow${doneOf(t) ? " done" : ""}${paneIs("T", t.id) ? " open" : ""}" draggable="true" tabindex="0" data-type="T" data-id="${t.id}" data-parent="${parent}">
-    <input type="checkbox" data-check${doneOf(t) ? " checked" : ""} aria-label="Done"><span class="name">${esc(t.name)}</span>${optHTML(parent, t.id)}${whoHTML(t)}${xTitle ? `<button class="x" data-unlink title="${xTitle}" aria-label="${xTitle}">×</button>` : ""}</div>`;
+    <input type="checkbox" data-check${doneOf(t) ? " checked" : ""} aria-label="Done"><span class="name">${esc(t.name)}</span>${dueHTML(t)}${optHTML(parent, t.id)}${whoHTML(t)}${xTitle ? `<button class="x" data-unlink title="${xTitle}" aria-label="${xTitle}">×</button>` : ""}</div>`;
 
 // A card's or outcome list's own deliverables and tasks (linked directly, skipping a level)
 export function directDelsHTML(p, xTitle) {
@@ -261,7 +302,7 @@ export function capHTML(c, out, xTitle = "Remove from this outcome") {
     <div class="meta"><span>${plural(dels.length, "D")}</span>${ownT.length ? `<span>${plural(ownT.length, "T")}</span>` : ""}${optHTML(out, c.id)}
 
       ${cst ? `<span class="pill${cst === DONE ? " ok" : ""}">${cst === DONE ? "✓ Available" : esc(cst)}</span>` : ""}
-      ${c.row[CFG.I.proposed] ? `<span class="pill">${esc(c.row[CFG.I.proposed])}</span>` : ""}${whoHTML(c)}${pills(c)}</div>
+      ${c.row[CFG.I.proposed] ? `<span class="pill">${esc(c.row[CFG.I.proposed])}</span>` : ""}${dueHTML(c)}${whoHTML(c)}${pills(c)}</div>
     ${metrics(c)}
     ${
       open
@@ -337,6 +378,7 @@ function renderPane() {
       ${x.parents.length ? `<div class="chips">${x.parents.map(chip).join("")}</div>` : ""}
       ${L !== "O" && sum ? `<div class="summary">${sum}</div>` : ""}
       ${FIELDS[L] ? `<div class="fields">${L === "SP" ? "" : typeField()}${FIELDS[L].map(field).join("")}${L === "SP" ? "" : peopleField()}</div>` : ""}
+      ${L !== "SP" ? `<div class="fields">${DUE_FIELDS.map(field).join("")}</div>` : ""}
       ${S.hasSprints && L !== "SP" ? sprintsHTML(L, x) : ""}
       ${note ? `<div class="pane-note">${esc(note)}</div>` : ""}</div>`;
   if (L !== "SP" && L !== "T") {
@@ -355,7 +397,7 @@ function renderPane() {
         ${ui.draft?.id === t.id ? draftHTML(LABEL.T, ui.draft.text) : `<span class="name">${esc(t.name)}</span>${optHTML(x.id, t.id)}${whoHTML(t)}`}
         <button class="urg" data-urg data-u="${esc(u)}" title="Urgency: ${esc(u || "Normal")} (click to change)" aria-label="Urgency: ${esc(u || "Normal")}"></button>
         <input class="teff" type="number" step="any" data-teffort value="${esc(num(t.row[CFG.I.effortEstimate]) ?? "")}" placeholder="effort" aria-label="Effort">
-        <span class="tsprints">${assignMenu(t)}${S.hasSprints ? sprintMenu("T", t) + pills(t, true) : ""}</span>
+        <span class="tsprints">${dueHTML(t)}${assignMenu(t)}${S.hasSprints ? sprintMenu("T", t) + pills(t, true) : ""}</span>
         <button class="trash" data-delete title="Delete task" aria-label="Delete task">${TRASH}</button>
         ${copies(t)}<button class="x" data-unlink title="Remove from this ${LABEL[L]}" aria-label="Remove from this ${LABEL[L]}">×</button></div>`;
           })
