@@ -81,15 +81,14 @@ function sprintHTML(sp) {
         .filter(matches)
         .map((t) => trowHTML(t, sp.id, X))
         .join("");
-  const sub = [sp.status, dates].filter(Boolean),
-    pct = Math.round((100 * done) / total),
+  const pct = Math.round((100 * done) / total),
     num = (n) => Math.round(n * 10) / 10,
     progress = total
       ? `<span class="progress" title="${num(done)}/${num(total)}"><span class="bar"><span style="width:${pct}%"></span></span>${pct}%</span>`
       : "";
   return `<section class="lane sprint" style="--sp:${sp.color}">
-    <div class="lane-head${paneIs("SP", sp.id) ? " open" : ""}" tabindex="0" data-type="SP" data-id="${sp.id}" data-parent="0" draggable="true" title="Drag to reorder">${esc(sp.name)}
-      <span class="sub">${sub.map(esc).join(" · ")}</span>${progress}</div>
+    <div class="lane-head${paneIs("SP", sp.id) ? " open" : ""}" tabindex="0" data-type="SP" data-id="${sp.id}" data-parent="0" draggable="true" title="Drag to reorder">${esc(sp.name)}${dates ? `<span class="dates">${esc(dates)}</span>` : ""}
+      <span class="sub">${esc(sp.status)}</span>${progress}</div>
     <div class="lane-body">${body || `<div class="empty">Nothing in this sprint yet.</div>`}${addItemHTML(`SP${sp.id}`, ["O", "C", "D", "T"], 0, sp.id, "T")}</div></section>`;
 }
 

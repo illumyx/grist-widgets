@@ -890,8 +890,9 @@ textarea.title:focus {
   font-size: 12px;
   color: var(--muted);
 }
-/* on its own line under the title of an outcome list, card, or note */
+/* on its own line under the title of an outcome list, card, or note (and a sprint's dates) */
 .lane-head > .due,
+.lane-head > .dates,
 .cap > .due,
 .ocard > .due,
 .del > .due {
