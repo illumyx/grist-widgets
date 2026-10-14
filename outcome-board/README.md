@@ -43,8 +43,8 @@ and clicking a deliverable opens its task checklist. Every link is many-to-many.
 - The filter matches capability, deliverable, and task names; matching tasks are highlighted in the side pane.
 - The pool stays in place while the other lists scroll sideways; "Hide pool" hides it (on both pages).
 - When it's due (side pane): "Due by" a date, "Due from" the earliest it could be due (a range with both; on
-  its own, open-ended), and a "Timing note" for timing that isn't a date ("Ongoing", "By cohort 3"). Cards, notes,
-  rows, and outcome headers show e.g. "Due Nov 10", "Due Oct 2026", "Due Dec 2026 - Jan 2027", "Due Mar 2027 or
+  its own, open-ended), and a "Timing note" for timing that isn't a date ("Ongoing", "By cohort 3"). Outcome headers,
+  cards, and notes show it in bold under the title (task rows, after the name), e.g. "Due Nov 10", "Due Oct 2026", "Due Dec 2026 - Jan 2027", "Due Mar 2027 or
   later" (whole months show as months), plus the note; red once the due-by day has passed and it isn't done.
 - Sprints (once `bin/extend_schema.py` has added the Sprints table): colored pills show an item's sprints;
   an outlined pill means it's inherited from a parent (everything under an item in a sprint is in it too).

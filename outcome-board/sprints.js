@@ -44,8 +44,8 @@ const X = "Remove from this sprint",
   xButton = `<button class="x" data-unlink title="${X}" aria-label="${X}">×</button>`;
 
 const outcomeHTML = (o, sp) =>
-  `<div class="ocard${paneIs("O", o.id) ? " open" : ""}" draggable="true" tabindex="0" data-type="O" data-id="${o.id}" data-parent="${sp.id}">${esc(o.name)}
-    <div class="meta"><span>${plural(o.kids.C.length, "C")}</span>${dueHTML(o)}</div>${xButton}</div>`;
+  `<div class="ocard${paneIs("O", o.id) ? " open" : ""}" draggable="true" tabindex="0" data-type="O" data-id="${o.id}" data-parent="${sp.id}">${esc(o.name)}${dueHTML(o)}
+    <div class="meta"><span>${plural(o.kids.C.length, "C")}</span></div>${xButton}</div>`;
 
 function sprintHTML(sp) {
   const k = sp.kids,
