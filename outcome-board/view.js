@@ -254,7 +254,7 @@ export function delHTML(d, cap, xTitle = "Remove from this capability") {
   const tasks = d.kids.T.map((t) => S.T.get(t)),
     done = tasks.filter(doneOf).length;
   const st = d.row[CFG.I.status] || "";
-  return `<div class="del${paneIs("D", d.id) ? " open" : ""}" draggable="true" tabindex="0" data-type="D" data-id="${d.id}" data-parent="${cap}" data-status="${esc(st)}"${urgAttr(d.row[CFG.I.urgency])}>
+  return `<div class="del${paneIs("D", d.id) ? " open" : ""}" data-drag tabindex="0" data-type="D" data-id="${d.id}" data-parent="${cap}" data-status="${esc(st)}"${urgAttr(d.row[CFG.I.urgency])}>
     ${esc(d.name)}${copies(d)}${dueHTML(d)}
     <div class="meta">${tasks.length ? `<span>${done}/${tasks.length} tasks</span>` : ""}${st ? `<span>${esc(st)}</span>` : ""}${optHTML(cap, d.id)}${whoHTML(d)}${pills(d)}</div>${metrics(d)}
     ${cap ? `<button class="x" data-unlink title="${xTitle}" aria-label="${xTitle}">×</button>` : ""}</div>`;
@@ -263,7 +263,7 @@ export function delHTML(d, cap, xTitle = "Remove from this capability") {
 // A task shown on its own (directly under a card or list, or in a sprint): a small row. Clicking it
 // opens its parent's side pane (its own, if it has no parent).
 export const trowHTML = (t, parent, xTitle) =>
-  `<div class="trow${doneOf(t) ? " done" : ""}${paneIs("T", t.id) ? " open" : ""}" draggable="true" tabindex="0" data-type="T" data-id="${t.id}" data-parent="${parent}">
+  `<div class="trow${doneOf(t) ? " done" : ""}${paneIs("T", t.id) ? " open" : ""}" data-drag tabindex="0" data-type="T" data-id="${t.id}" data-parent="${parent}">
     <input type="checkbox" data-check${doneOf(t) ? " checked" : ""} aria-label="Done"><span class="name">${esc(t.name)}</span>${dueHTML(t)}${optHTML(parent, t.id)}${whoHTML(t)}${xTitle ? `<button class="x" data-unlink title="${xTitle}" aria-label="${xTitle}">×</button>` : ""}</div>`;
 
 // A card's or outcome list's own deliverables and tasks (linked directly, skipping a level)
@@ -296,7 +296,7 @@ export function capHTML(c, out, xTitle = "Remove from this outcome") {
     .filter((d) => !doneOf(d))
     .map((d) => d.row[CFG.I.urgency])
     .sort((x, y) => urgRank(y) - urgRank(x))[0];
-  return `<div class="cap${paneIs("C", c.id) ? " open" : ""}" draggable="true" tabindex="0" data-type="C" data-id="${c.id}" data-parent="${out}"${urgAttr(urg)}>
+  return `<div class="cap${paneIs("C", c.id) ? " open" : ""}" data-drag tabindex="0" data-type="C" data-id="${c.id}" data-parent="${out}"${urgAttr(urg)}>
     <div class="cap-title"><button class="chev" data-toggle aria-expanded="${open}" aria-label="${open ? "Collapse" : "Expand"}">${open ? "▾" : "▸"}</button>${esc(c.name)}</div>${dueHTML(c)}
     ${copies(c)}
     <div class="meta"><span>${plural(dels.length, "D")}</span>${ownT.length ? `<span>${plural(ownT.length, "T")}</span>` : ""}${optHTML(out, c.id)}
@@ -392,7 +392,7 @@ function renderPane() {
             const u = t.row[CFG.I.urgency] || "";
             if (confirming("T", t.id))
               return `<div class="task" data-type="T" data-id="${t.id}" data-parent="${x.id}">${confirmHTML(ui.confirm)}</div>`;
-            return `<div class="task${doneOf(t) ? " done" : ""}${q() && matches(t) ? " hit" : ""}" draggable="true" tabindex="0" data-type="T" data-id="${t.id}" data-parent="${x.id}">
+            return `<div class="task${doneOf(t) ? " done" : ""}${q() && matches(t) ? " hit" : ""}" data-drag tabindex="0" data-type="T" data-id="${t.id}" data-parent="${x.id}">
         <input type="checkbox" data-check ${doneOf(t) ? "checked" : ""} aria-label="Done">
         ${ui.draft?.id === t.id ? draftHTML(LABEL.T, ui.draft.text) : `<span class="name">${esc(t.name)}</span>${optHTML(x.id, t.id)}${whoHTML(t)}`}
         <button class="urg" data-urg data-u="${esc(u)}" title="Urgency: ${esc(u || "Normal")} (click to change)" aria-label="Urgency: ${esc(u || "Normal")}"></button>
@@ -719,11 +719,11 @@ document.addEventListener("focusout", (e) => {
   setTimeout(render); // after the click that moved the focus lands on what it clicked
 });
 
-// Hovering a note outlines its other copies.
+// Hovering a note outlines its other copies (not while dragging).
 document.addEventListener("mouseover", (e) => {
   const n = noteOf(e.target);
   document.querySelectorAll(".twin").forEach((x) => x.classList.remove("twin"));
-  if (!n || n.dataset.type === "O" || !+n.dataset.id) return;
+  if (!n || ui.drag || n.dataset.type === "O" || !+n.dataset.id) return;
   document
     .querySelectorAll(
       `[data-type="${n.dataset.type}"][data-id="${n.dataset.id}"]`,
@@ -824,6 +824,9 @@ const PASTE_INTO = {
 };
 
 // ---- Drag and drop (move) --------------------------------------------------------------------------
+// Dragging follows the pointer (pointerdown/move/up) rather than using the browser's drag and drop,
+// which can get stuck inside Grist's widget frame: the browser stops sending the widget any input
+// until the page is reloaded. A note being dragged is drawn as a faded copy that follows the pointer.
 let marker = null;
 function clearDrop() {
   marker?.remove();
@@ -879,13 +882,15 @@ const edgeStep = (p, lo, hi) =>
     : p <= hi && p > hi - EDGE
       ? SPEED * (1 - (hi - p) / EDGE)
       : 0;
-let pointer = null; // last dragover position, set below
+let pointer = null; // last pointer position while dragging, {x, y}; set below
 function autoScroll() {
   if (!ui.drag) return (pointer = null);
-  if (pointer) {
+  const el = pointer && document.elementFromPoint(pointer.x, pointer.y);
+  if (el) {
     const board = $("#board"),
-      list = pointer.el.closest(".lane-body, .tasks");
-    if (pointer.el.closest("#board")) {
+      list = el.closest(".lane-body, .tasks"),
+      was = [board.scrollLeft, list?.scrollTop];
+    if (el.closest("#board")) {
       const r = board.getBoundingClientRect();
       board.scrollLeft += edgeStep(pointer.x, r.left, r.right);
     }
@@ -893,21 +898,11 @@ function autoScroll() {
       const r = list.getBoundingClientRect();
       list.scrollTop += edgeStep(pointer.y, r.top, r.bottom);
     }
+    // the pointer is still but what's under it moved: show where the note would land now
+    if (board.scrollLeft !== was[0] || list?.scrollTop !== was[1]) showDrop();
   }
   requestAnimationFrame(autoScroll);
 }
-
-document.addEventListener("dragstart", (e) => {
-  const n = noteOf(e.target);
-  if (!n || !n.draggable) return;
-  if (document.activeElement?.matches(".draft")) return e.preventDefault(); // selecting text in a draft
-  // el: where the drag started (pages can look at its context); lane: a list header (reorders lists)
-  ui.drag = { ...selOf(n), el: n, lane: n.matches(".lane-head") };
-  requestAnimationFrame(autoScroll);
-  e.dataTransfer.effectAllowed = "move";
-  e.dataTransfer.setData("text/plain", n.dataset.id);
-  requestAnimationFrame(() => n.classList.add("dragging"));
-});
 
 // Lists (outcomes on the board, sprints on the sprints page) reorder left/right; the order is saved
 // in their table's row order (manualSort).
@@ -927,25 +922,32 @@ function laneSlot(e) {
   return { before, order: others.map((l) => +$(".lane-head", l).dataset.id) };
 }
 
-document.addEventListener("dragover", (e) => {
-  pointer = { x: e.clientX, y: e.clientY, el: e.target };
-  if (ui.drag?.lane) {
-    if (!e.target.closest("#board")) return;
-    e.preventDefault();
-    clearDrop();
-    const { before } = laneSlot(e);
+// What's under the point (x, y), in the shape over() and the drop targets take.
+const under = (x, y) => ({
+  target: document.elementFromPoint(x, y),
+  clientX: x,
+  clientY: y,
+});
+
+// Where the dragged note would land at (x, y), marked on the page: a line where it would go in a
+// list, or an outline on the list or note it would go into. null if it can't land there.
+function over(x, y) {
+  clearDrop(); // first, so the old line is neither what's under the pointer nor a place to go
+  const e = under(x, y);
+  if (!e.target) return null; // outside the widget
+  if (ui.drag.lane) {
+    if (!e.target.closest("#board")) return null;
+    const slot = laneSlot(e);
     marker = document.createElement("div");
     marker.className = "lane-marker";
-    $("#board").insertBefore(marker, before || $("#board .add-lane"));
-    return;
+    $("#board").insertBefore(marker, slot.before || $("#board .add-lane"));
+    return slot;
   }
   if (page.dropTarget && !e.target.closest("#pane")) {
     // this page decides where items can land on the board (the sprints page); the side pane
     // always works as usual (reorder tasks, move them between deliverables)
     const t = landing(e, page.dropTarget);
-    clearDrop();
     if (t) {
-      e.preventDefault();
       t.el.classList.add("drop-into");
       if (t.zone) {
         // where in the list it will land
@@ -954,16 +956,14 @@ document.addEventListener("dragover", (e) => {
         t.zone.insertBefore(marker, t.ref);
       }
     }
-    return;
+    return t && { ...t, page: true };
   }
   const t = landing(e, dropTarget, laneTarget);
-  clearDrop();
-  if (!t) return;
-  e.preventDefault();
+  if (!t) return null;
   if (t.into) {
     t.into.classList.add("drop-into");
     t.index = Infinity;
-    return;
+    return t;
   }
   const items = [...t.zone.children].filter(
     (x) => x.dataset.type === ui.drag.type && !x.classList.contains("dragging"),
@@ -978,37 +978,27 @@ document.addEventListener("dragover", (e) => {
     marker,
     before || t.zone.querySelector(":scope > .add, :scope > .additem") || null,
   );
-});
+  return t;
+}
+// Mark where the note would land under the pointer; the pointer shows when it can't land there.
+function showDrop() {
+  document.body.classList.toggle("no-drop", !over(pointer.x, pointer.y));
+}
 
-document.addEventListener("drop", (e) => {
-  if (ui.drag?.lane) {
-    e.preventDefault();
-    const { before, order } = laneSlot(e),
-      { id, type } = ui.drag;
+// Drop the dragged note at (x, y). (The caller ends the drag.)
+function drop(x, y) {
+  const d = ui.drag,
+    t = over(x, y);
+  if (!t) return;
+  if (d.lane) {
+    const { before, order } = t;
     const at = before
       ? order.indexOf(+$(".lane-head", before).dataset.id)
       : order.length;
-    order.splice(at, 0, id);
-    clearDrop();
-    ui.drag = null;
-    act([rowOrderAction(type, order)]);
-    return;
+    order.splice(at, 0, d.id);
+    return act([rowOrderAction(d.type, order)]);
   }
-  if (page.dropTarget && !e.target.closest("#pane")) {
-    const t = landing(e, page.dropTarget),
-      d = ui.drag;
-    clearDrop();
-    ui.drag = null;
-    if (t && d) {
-      e.preventDefault();
-      page.drop(d, t);
-    }
-    return;
-  }
-  const t = landing(e, dropTarget, laneTarget),
-    d = ui.drag;
-  if (!t || !d) return;
-  e.preventDefault();
+  if (t.page) return page.drop(d, t);
   let index = Infinity,
     beforeId = null;
   if (t.zone && marker) {
@@ -1022,18 +1012,102 @@ document.addEventListener("drop", (e) => {
     index = beforeId ? full.indexOf(beforeId) : full.length;
     if (index < 0) index = full.length;
   }
-  clearDrop();
-  ui.drag = null;
   move(d.type, d.id, d.parent, t.parent, index, beforeId);
-});
+}
 
-document.addEventListener("dragend", () => {
+const START = 6; // px the pointer moves, button held, before pressing a note becomes dragging it
+let press = null, // the note pressed: {el, x, y}; while dragging also dragged, and dx, dy (see below)
+  ghost = null, // the copy of the note that follows the pointer
+  afterDrag = false; // the click that ends a drag isn't a click on what's under the pointer
+
+function startDrag() {
+  const n = press.el,
+    r = n.getBoundingClientRect();
+  press.dragged = true;
+  press.dx = press.x - r.left; // the point grabbed stays under the pointer
+  press.dy = press.y - r.top;
+  // el: where the drag started (pages can look at its context); lane: a list header (reorders lists)
+  ui.drag = { ...selOf(n), el: n, lane: n.matches(".lane-head") };
+  ghost = n.cloneNode(true);
+  ghost.classList.remove("selected", "open");
+  ghost.classList.add("ghost");
+  ghost.inert = true; // only a picture: never focused or read out
+  ghost.style.width = `${r.width}px`;
+  document.body.append(ghost);
+  n.classList.add("dragging");
+  document.body.classList.add("drag-on");
+  requestAnimationFrame(autoScroll);
+}
+
+function endDrag() {
   clearDrop();
+  ghost?.remove();
+  ghost = null;
   ui.drag = null;
+  document.body.classList.remove("drag-on", "no-drop");
   document
     .querySelectorAll(".dragging")
     .forEach((x) => x.classList.remove("dragging"));
+}
+function cancelDrag() {
+  press = null;
+  if (ui.drag) endDrag();
+}
+
+document.addEventListener("pointerdown", (e) => {
+  const n = noteOf(e.target);
+  // (in a text box, the pointer selects text instead)
+  if (
+    e.button === 0 &&
+    n?.hasAttribute("data-drag") &&
+    !e.target.closest("input, select, textarea")
+  )
+    press = { el: n, x: e.clientX, y: e.clientY };
 });
+// pressing a note doesn't select its text (dragging it would)
+document.addEventListener("selectstart", (e) => press && e.preventDefault());
+
+document.addEventListener("pointermove", (e) => {
+  if (!press) return;
+  if (!e.buttons) return cancelDrag(); // the button came up where the widget couldn't see it
+  if (!press.dragged) {
+    if (Math.hypot(e.clientX - press.x, e.clientY - press.y) < START) return;
+    if (!press.el.isConnected) return (press = null); // redrawn since it was pressed
+    startDrag();
+  }
+  if (!ui.drag) return; // cancelled with Esc; the button is still down
+  pointer = { x: e.clientX, y: e.clientY };
+  ghost.style.transform = `translate(${e.clientX - press.dx}px, ${e.clientY - press.dy}px)`;
+  showDrop();
+});
+
+document.addEventListener("pointerup", (e) => {
+  if (press?.dragged) {
+    afterDrag = true;
+    setTimeout(() => (afterDrag = false)); // the click, if any, comes right after pointerup
+  }
+  press = null;
+  if (!ui.drag) return;
+  try {
+    drop(e.clientX, e.clientY);
+  } finally {
+    endDrag(); // even if dropping fails: a drag is never left stuck
+  }
+});
+document.addEventListener("pointercancel", cancelDrag);
+document.addEventListener("click", (e) => afterDrag && e.stopPropagation(), {
+  capture: true,
+});
+// Esc cancels a drag (before the other key handling, which would also close the side pane)
+document.addEventListener(
+  "keydown",
+  (e) => {
+    if (e.key !== "Escape" || !ui.drag) return;
+    endDrag();
+    e.stopPropagation();
+  },
+  { capture: true },
+);
 
 // The pool list: capabilities, then deliverables and tasks, like an outcome list's. note: the hint under
 // the title; extra: more header checkboxes.

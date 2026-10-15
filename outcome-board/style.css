@@ -320,7 +320,7 @@ input {
   border-radius: 2px;
   margin: 0 -8px;
 }
-.lane-head[draggable="true"] {
+.lane-head[data-drag] {
   cursor: grab;
 }
 .drop-marker {
@@ -916,4 +916,28 @@ textarea.title:focus {
 /* the sprints page shows an item's sprints by the list it's in, so the notes don't repeat them */
 .sprints-page #board .sp {
   display: none;
+}
+
+/* Dragging (view.js): the copy of the note that follows the pointer, and the pointer, which shows
+   when the note can't be dropped where it is */
+.ghost {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 10;
+  margin: 0;
+  opacity: 0.85;
+  pointer-events: none;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
+}
+.lane-head.ghost {
+  background: var(--lane);
+}
+.drag-on,
+.drag-on * {
+  cursor: grabbing !important;
+}
+.drag-on.no-drop,
+.drag-on.no-drop * {
+  cursor: no-drop !important;
 }

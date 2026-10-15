@@ -35,5 +35,9 @@
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
     <script src="mock.js"></script>
     <script type="module" src="board.js"></script>
+    <!-- index.html?test runs the tests (see test.js) -->
+    <script type="module">
+      if (new URLSearchParams(location.search).has("test")) import("./test.js");
+    </script>
   </body>
 </html>

@@ -44,7 +44,7 @@ const X = "Remove from this sprint",
   xButton = `<button class="x" data-unlink title="${X}" aria-label="${X}">×</button>`;
 
 const outcomeHTML = (o, sp) =>
-  `<div class="ocard${paneIs("O", o.id) ? " open" : ""}" draggable="true" tabindex="0" data-type="O" data-id="${o.id}" data-parent="${sp.id}">${esc(o.name)}${dueHTML(o)}
+  `<div class="ocard${paneIs("O", o.id) ? " open" : ""}" data-drag tabindex="0" data-type="O" data-id="${o.id}" data-parent="${sp.id}">${esc(o.name)}${dueHTML(o)}
     <div class="meta"><span>${plural(o.kids.C.length, "C")}</span></div>${xButton}</div>`;
 
 function sprintHTML(sp) {
@@ -87,7 +87,7 @@ function sprintHTML(sp) {
       ? `<span class="progress" title="${num(done)}/${num(total)}"><span class="bar"><span style="width:${pct}%"></span></span>${pct}%</span>`
       : "";
   return `<section class="lane sprint" style="--sp:${sp.color}">
-    <div class="lane-head${paneIs("SP", sp.id) ? " open" : ""}" tabindex="0" data-type="SP" data-id="${sp.id}" data-parent="0" draggable="true" title="Drag to reorder">${esc(sp.name)}${dates ? `<span class="dates">${esc(dates)}</span>` : ""}
+    <div class="lane-head${paneIs("SP", sp.id) ? " open" : ""}" tabindex="0" data-type="SP" data-id="${sp.id}" data-parent="0" data-drag title="Drag to reorder">${esc(sp.name)}${dates ? `<span class="dates">${esc(dates)}</span>` : ""}
       <span class="sub">${esc(sp.status)}</span>${progress}</div>
     <div class="lane-body">${body || `<div class="empty">Nothing in this sprint yet.</div>`}${addItemHTML(`SP${sp.id}`, ["O", "C", "D", "T"], 0, sp.id, "T")}</div></section>`;
 }
