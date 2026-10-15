@@ -49,7 +49,6 @@ import {
 const q = () => $("#search").value.trim().toLowerCase();
 const hideDone = () => $("#hideDone").checked;
 const hideShelved = () => $("#hideShelved").checked;
-const hidePool = () => $("#hidePool").checked;
 export const matches = (x) => !q() || x.name.toLowerCase().includes(q());
 export const doneOf = (x) => x.row[CFG.I.status] === DONE;
 export const visible = (x) =>
@@ -495,6 +494,11 @@ document.addEventListener("click", (e) => {
     ui.pane = null;
     render();
     return;
+  }
+  if (t.closest("[data-pool]")) {
+    // the pool's collapse button, or the strip it collapses to
+    ui.poolClosed = !ui.poolClosed;
+    return render();
   }
   if (t.closest("[data-delete]")) {
     // a task's trash button, or the pane's Delete button
@@ -1127,15 +1131,18 @@ document.addEventListener(
 );
 
 // The pool list: capabilities, then deliverables and tasks, like an outcome list's. note: the hint under
-// the title; extra: more header checkboxes.
+// the title; extra: more header checkboxes. Its < button collapses it to a slim strip, which opens it
+// again when clicked; notes dropped on the strip land in the pool as usual.
 export function poolHTML(note, extra = "") {
-  if (hidePool()) return "";
+  if (ui.poolClosed)
+    return `<section class="lane unlinked closed">
+    <div class="lane-head" tabindex="0" data-type="O" data-id="0" data-parent="0" data-pool title="Show the pool"><span>›</span><span class="name">Pool</span></div></section>`;
   const tasks = kidsOf("T", 0)
     .map((t) => S.T.get(t))
     .filter(visible)
     .filter(matches); // (unlike a card's own tasks, which show with their card)
   return `<section class="lane unlinked">
-    <div class="lane-head" tabindex="0" data-type="O" data-id="0" data-parent="0">Pool
+    <div class="lane-head" tabindex="0" data-type="O" data-id="0" data-parent="0">Pool<button class="pool-x" data-pool title="Hide the pool" aria-label="Hide the pool">‹</button>
       <span class="sub">${note} <label class="toggle"><input type="checkbox" data-hidelinked${ui.showAll ? "" : " checked"}> Hide linked</label>${extra}</span></div>
     <div class="lane-body" data-drop="C" data-parent="0">${kidsOf("C", 0)
       .map((c) => capHTML(S.C.get(c), 0))
@@ -1188,7 +1195,6 @@ function afterRender() {
 $("#search").addEventListener("input", render);
 $("#hideDone").addEventListener("change", render);
 $("#hideShelved").addEventListener("change", render);
-$("#hidePool").addEventListener("change", render);
 $("#expandAll").addEventListener("click", () => {
   document
     .querySelectorAll("#board .cap")

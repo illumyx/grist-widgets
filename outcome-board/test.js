@@ -1,4 +1,5 @@
-/* In-browser tests for the boards -- dragging notes, and shelved (tabled or archived) items -- run
+/* In-browser tests for the boards -- dragging notes, shelved (tabled or archived) items, and the
+ * collapsible pool -- run
  * against the demo data in mock.js. Nothing to install: serve the folder (cd outcome-board &&
  * python -m http.server 8000) and open http://localhost:8000/index.html?test and
  * http://localhost:8000/sprints.html?test -- the results show at the top of the page. The tests
@@ -41,6 +42,22 @@ const del = (cap, id) =>
   $(`#board .cap[data-id="${cap}"] .del[data-id="${id}"]`);
 const kidsD = (cap) => S.all.get(cap).kids.D;
 const dragDone = () => !ui.drag && !$(".ghost") && !$(".dragging");
+// drag the note el and drop it on target
+function dragTo(el, target) {
+  const from = center(el),
+    to = center(target);
+  pointer("pointerdown", ...from);
+  pointer("pointermove", from[0] + 10, from[1]);
+  pointer("pointermove", ...to);
+  release(...to);
+}
+const strip = () => $("#board .lane.unlinked.closed");
+// click the pool's collapse button, and say if it's now a strip
+async function closePool() {
+  $("#board .lane.unlinked .pool-x").click();
+  await settle();
+  return !!strip() && !$("#board .lane.unlinked .lane-body");
+}
 // choose a value in one of the side pane's menus, as if picked by hand
 function choose(field, value) {
   const menu = $(`#pane select[data-field="${field}"]`);
@@ -60,6 +77,7 @@ async function run() {
   await settle();
   await dragTests();
   await shelvedTests();
+  await poolTests();
 }
 
 // Outcome board. Demo data: capability 2 holds deliverable 5; capability 3 holds 5 and 6 (which has
@@ -208,6 +226,26 @@ async function shelvedTests() {
   await settle();
 }
 
+// Outcome board, after shelvedTests: deliverable 5 is on capabilities 2 and 3.
+async function poolTests() {
+  check(
+    "the pool's collapse button collapses it to a strip",
+    await closePool(),
+  );
+  dragTo(del(2, 5), strip());
+  await settle();
+  check(
+    "dropping a note on the strip unlinks it (and doesn't open the pool)",
+    !kidsD(2).includes(5) && kidsD(3).includes(5) && !!strip(),
+  );
+  $("#board .lane.unlinked.closed .lane-head").click();
+  await settle();
+  check(
+    "clicking the strip opens the pool",
+    !strip() && !!$("#board .lane.unlinked .lane-body"),
+  );
+}
+
 // Sprints page. Demo data: capability 4 (archived) is in the pool; Sprint 2 holds capability 2, so
 // also its deliverable 5 and 5's tasks 8 (done), 9, and 11 (tabled); and task 10.
 async function sprintsTests() {
@@ -225,6 +263,15 @@ async function sprintsTests() {
   $("#hideShelved").click();
   await settle();
   check("unticked, it shows, faded", pool('.cap[data-id="4"].shelved'));
+
+  // dragging task 10 out of Sprint 2 onto the collapsed pool takes it out of the sprint
+  check("the pool collapses here too", await closePool());
+  dragTo($('#board .lane.sprint .trow[data-id="10"]'), strip());
+  await settle();
+  check(
+    "dropping on the collapsed pool takes an item out of its sprint",
+    !S.SP.get(2).items.includes(10),
+  );
 }
 
 // show the results at the top of the page (and in the console)

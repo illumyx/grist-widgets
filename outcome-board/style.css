@@ -105,6 +105,41 @@ input {
   cursor: pointer;
   border-radius: 6px 6px 0 0;
 }
+/* the pool's collapse button (at the pool's top right: the pool is position: sticky), and the strip
+   it collapses to (view.js poolHTML) */
+.pool-x {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  border: none;
+  background: none;
+  color: var(--muted);
+  font-size: 18px;
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: 3px;
+  cursor: pointer;
+}
+.pool-x:hover {
+  background: rgba(0, 0, 0, 0.08);
+}
+.lane.unlinked.closed {
+  flex-basis: 36px;
+}
+.lane.unlinked.closed > .lane-head {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 0;
+  color: var(--muted);
+  font-size: 16px;
+}
+.lane.unlinked.closed .name {
+  writing-mode: vertical-rl;
+  font-size: 14px;
+}
 .lane-head .sub {
   display: block;
   font-weight: 400;

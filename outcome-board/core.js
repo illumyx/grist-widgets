@@ -176,6 +176,7 @@ export const ui = {
   confirm: null, // {type, id} of the item whose delete is waiting for confirmation
   showAll: false, // pool shows every item, not just unlinked ones ("Hide linked" unticked)
   hidePlanned: false, // pool leaves out items already in a planned or active sprint (sprints page)
+  poolClosed: false, // the pool is collapsed to a strip (its < button)
 };
 
 // ---- Data ------------------------------------------------------------------------------------------
