@@ -27,6 +27,11 @@ and clicking a deliverable opens its task checklist. Every link is many-to-many.
   Space expands a capability or opens/closes a deliverable's side pane; Enter opens the side pane.
 - ×N means the note appears in N places; hovering outlines the other copies.
 - Capabilities have a status (Not Started / In Progress / Review / Done); a done one shows as "Available", and "Hide done" hides it (and done outcome lists).
+- Any item can be shelved with the side pane's Shelved menu: Tabled (not now, maybe later) or Archived (dropped).
+  "Hide shelved" (ticked to start, on both pages) hides shelved items and what's drawn under them; unticked, they show
+  faded, with a Tabled or Archived tag. A shelved item isn't counted in its deliverable's tasks, its capability's
+  urgency, a sprint's progress, or (in Grist) its parents' roll-ups; it isn't shown as late; and it doesn't bring
+  what's under it into its sprints. (A task in a checklist has no side pane of its own: shelve it in Grist.)
 - Click an outcome header, capability, or deliverable to open its details in the side pane: type, status, urgency,
   impact/effort estimates, and when it's due. "~8" means the number is an estimate; plain "8" is rolled up from linked items.
 - The side pane's Type changes an item's level (e.g. a deliverable into a task). Levels it can't take are
@@ -60,13 +65,14 @@ Column names are in `CFG` and `FIELDS` at the top of `core.js`. Expects the tabl
 
 Open http://localhost:8000 for a demo with sample data (changes stay in the browser).
 To run it against the real doc, use http://localhost:8000/index.html as the widget URL below.
+Add `?test` (index.html?test, sprints.html?test) to run the tests in `test.js` against the sample data.
 
 ## Sprints page (`sprints.html`)
 
 The pool, then one list per sprint: Planned and Active (tick "Show completed" for the rest), in start-date order
 until you drag a sprint's header to reorder. Each list holds what was added to that sprint (outcomes, capabilities,
 deliverables, and tasks as small rows), laid out like the pool; whatever is under an item comes with it.
-The header shows its dates (in bold under the name), status, and a progress bar (share of effort done among items with nothing under them, or of the items if any has no effort; hover for the numbers). Click it to edit the sprint
+The header shows its dates (in bold under the name), status, and a progress bar (share of effort done among items with nothing under them, or of the items if any has no effort, leaving out shelved ones; hover for the numbers). Click it to edit the sprint
 (name, status, dates, notes) or delete it (its items are kept). "+ Add sprint" adds one.
 
 - The pool starts with every item; "Hide planned" leaves out items already in a planned or active sprint.

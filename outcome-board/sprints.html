@@ -23,6 +23,9 @@
       <label class="toggle"
         ><input id="hideDone" type="checkbox" checked /> Hide done</label
       >
+      <label class="toggle" title="Hide tabled and archived items"
+        ><input id="hideShelved" type="checkbox" checked /> Hide shelved</label
+      >
       <label class="toggle"
         ><input id="hidePool" type="checkbox" /> Hide pool</label
       >
@@ -38,5 +41,9 @@
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
     <script src="mock.js"></script>
     <script type="module" src="sprints.js"></script>
+    <!-- sprints.html?test runs the tests (see test.js) -->
+    <script type="module">
+      if (new URLSearchParams(location.search).has("test")) import("./test.js");
+    </script>
   </body>
 </html>

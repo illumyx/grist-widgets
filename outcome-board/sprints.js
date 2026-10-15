@@ -19,6 +19,7 @@ import {
   unlink,
   toast,
   SPRINT_DONE,
+  shelvedOf,
   $,
 } from "./core.js";
 import {
@@ -36,6 +37,8 @@ import {
   hit,
   poolHTML,
   trowHTML,
+  shelfClass,
+  shelfHTML,
 } from "./view.js";
 
 ui.showAll = true; // the pool starts with every item ("Hide linked" unticked)
@@ -44,14 +47,17 @@ const X = "Remove from this sprint",
   xButton = `<button class="x" data-unlink title="${X}" aria-label="${X}">×</button>`;
 
 const outcomeHTML = (o, sp) =>
-  `<div class="ocard${paneIs("O", o.id) ? " open" : ""}" data-drag tabindex="0" data-type="O" data-id="${o.id}" data-parent="${sp.id}">${esc(o.name)}${dueHTML(o)}
-    <div class="meta"><span>${plural(o.kids.C.length, "C")}</span></div>${xButton}</div>`;
+  `<div class="ocard${shelfClass(o)}${paneIs("O", o.id) ? " open" : ""}" data-drag tabindex="0" data-type="O" data-id="${o.id}" data-parent="${sp.id}">${esc(o.name)}${dueHTML(o)}
+    <div class="meta"><span>${plural(o.kids.C.length, "C")}</span>${shelfHTML(o)}</div>${xButton}</div>`;
 
 function sprintHTML(sp) {
   const k = sp.kids,
-    // what's in the sprint, on its own or through a parent (outcomes have no status to count)
+    // what's in the sprint, on its own or through a parent (outcomes have no status to count), and
+    // not shelved
     items = ["C", "D", "T"].flatMap((type) =>
-      [...S[type].values()].filter((x) => x.own.has(sp.id) || x.via.has(sp.id)),
+      [...S[type].values()].filter(
+        (x) => (x.own.has(sp.id) || x.via.has(sp.id)) && !shelvedOf(x),
+      ),
     ),
     // progress: done among the items with nothing under them (a parent's effort is its children's),
     // weighted by effort when every one has an effort (a blank one reads as 0), else counted
@@ -69,6 +75,7 @@ function sprintHTML(sp) {
       .filter(hit),
     body =
       k.O.map((id) => S.O.get(id))
+        .filter(visible)
         .filter(matches)
         .map((o) => outcomeHTML(o, sp))
         .join("") +

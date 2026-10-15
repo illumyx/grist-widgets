@@ -1,7 +1,8 @@
-/* In-browser tests for dragging notes (view.js), run against the demo data in mock.js. Nothing to
- * install: serve the folder (cd outcome-board && python -m http.server 8000) and open
- * http://localhost:8000/index.html?test -- the results show at the top of the page. The tests change
- * the demo data, so reload to run them again. */
+/* In-browser tests for the boards -- dragging notes, and shelved (tabled or archived) items -- run
+ * against the demo data in mock.js. Nothing to install: serve the folder (cd outcome-board &&
+ * python -m http.server 8000) and open http://localhost:8000/index.html?test and
+ * http://localhost:8000/sprints.html?test -- the results show at the top of the page. The tests
+ * change the demo data, so reload to run them again. */
 
 import { S, ui } from "./core.js";
 
@@ -40,6 +41,12 @@ const del = (cap, id) =>
   $(`#board .cap[data-id="${cap}"] .del[data-id="${id}"]`);
 const kidsD = (cap) => S.all.get(cap).kids.D;
 const dragDone = () => !ui.drag && !$(".ghost") && !$(".dragging");
+// choose a value in one of the side pane's menus, as if picked by hand
+function choose(field, value) {
+  const menu = $(`#pane select[data-field="${field}"]`);
+  menu.value = value;
+  menu.dispatchEvent(new Event("change", { bubbles: true }));
+}
 
 const results = [];
 function check(name, ok) {
@@ -48,10 +55,16 @@ function check(name, ok) {
 
 async function run() {
   while (!$("#board .del")) await settle(); // the board has loaded
+  if (document.body.classList.contains("sprints-page")) return sprintsTests();
   $("#expandAll").click();
   await settle();
-  // demo data: capability 2 holds deliverable 5; capability 3 holds 5 and 6 (which has task 10)
+  await dragTests();
+  await shelvedTests();
+}
 
+// Outcome board. Demo data: capability 2 holds deliverable 5; capability 3 holds 5 and 6 (which has
+// task 10).
+async function dragTests() {
   // a click that wobbles a little still opens the side pane, and doesn't drag
   const [x, y] = center(del(3, 6));
   pointer("pointerdown", x, y);
@@ -119,6 +132,99 @@ async function run() {
   pointer("pointermove", eff[0] + 30, eff[1]);
   check("pressing in a text box doesn't drag", !ui.drag);
   pointer("pointerup", eff[0] + 30, eff[1], 0);
+}
+
+// Outcome board, after dragTests (deliverable 6 is now on capability 2). Demo data: capability 4 is
+// archived; deliverable 5 has tasks 8 (done), 9, and 11 (tabled); deliverable 6 is in Sprint 3, so
+// its task 10 is too; deliverable 7 is overdue.
+async function shelvedTests() {
+  const hide = $("#hideShelved"),
+    shown = (sel) => !!$(`#board ${sel}`);
+  check("Hide shelved starts ticked", hide.checked);
+  check("an archived capability is hidden", !shown('.cap[data-id="4"]'));
+  del(2, 5).click();
+  await settle();
+  check(
+    "a tabled task is left out of its deliverable's checklist",
+    !$('#pane .task[data-id="11"]') && !!$('#pane .task[data-id="9"]'),
+  );
+  check(
+    "... and its task count",
+    del(2, 5).querySelector(".meta").textContent.includes("1/2 tasks"),
+  );
+
+  hide.click(); // untick it
+  await settle();
+  const cap4 = $('#board .cap[data-id="4"]');
+  check(
+    "unticked, shelved items show, faded and tagged",
+    cap4?.classList.contains("shelved") &&
+      cap4.querySelector(".shelf")?.textContent === "Archived" &&
+      $('#pane .task[data-id="11"] .shelf')?.textContent === "Tabled",
+  );
+  hide.click(); // tick it again
+  await settle();
+
+  // shelving deliverable 6 from its side pane, then un-shelving it
+  del(2, 6).click();
+  await settle();
+  const menu = $('#pane select[data-field="Shelved"]');
+  check(
+    "the side pane has a Shelved menu: No, Tabled, Archived",
+    [...menu.options].map((o) => o.text).join() === "No,Tabled,Archived" &&
+      menu.value === "",
+  );
+  const before = S.T.get(10).via.has(3);
+  choose("Shelved", "Tabled");
+  await settle();
+  check(
+    "shelving it from the side pane saves it and hides it",
+    S.D.get(6).row.Shelved === "Tabled" && !del(2, 6),
+  );
+  check(
+    "a shelved item doesn't bring what's under it into its sprint",
+    before && !S.T.get(10).via.has(3),
+  );
+  choose("Shelved", "");
+  await settle();
+  check(
+    "choosing No un-shelves it",
+    !S.D.get(6).row.Shelved && !!del(2, 6) && S.T.get(10).via.has(3),
+  );
+
+  // an overdue item that's shelved isn't shown as late
+  const late = () => !!$('#board .del[data-id="7"] .due.late');
+  check("an overdue item shows as late", late());
+  $('#board .del[data-id="7"]').click();
+  await settle();
+  hide.click(); // untick, to see it once it's shelved
+  choose("Shelved", "Archived");
+  await settle();
+  check(
+    "... but not once it's shelved",
+    shown('.del[data-id="7"].shelved') && !late(),
+  );
+  hide.click();
+  await settle();
+}
+
+// Sprints page. Demo data: capability 4 (archived) is in the pool; Sprint 2 holds capability 2, so
+// also its deliverable 5 and 5's tasks 8 (done), 9, and 11 (tabled); and task 10.
+async function sprintsTests() {
+  const pool = (sel) => !!$(`#board .lane.unlinked ${sel}`),
+    progress = (sid) =>
+      $(`#board .lane-head[data-id="${sid}"] .progress`)?.textContent;
+  check(
+    "a sprint's progress leaves out shelved items (1 of tasks 8, 9, 10 done)",
+    progress(2) === "33%",
+  );
+  check(
+    "Hide shelved starts ticked, hiding an archived capability",
+    $("#hideShelved").checked && !pool('.cap[data-id="4"]'),
+  );
+  $("#hideShelved").click();
+  await settle();
+  check("unticked, it shows, faded", pool('.cap[data-id="4"].shelved'));
 }
 
 // show the results at the top of the page (and in the console)

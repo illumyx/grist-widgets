@@ -7,7 +7,7 @@
     ["Items", "Children", "Items", "Parents"],
     ["Sprints", "Items", "Items", "Sprints"],
   ];
-  // ids: outcome 1, capabilities 2-4, deliverables 5-7, tasks 8-10
+  // ids: outcome 1, capabilities 2-4, deliverables 5-7, tasks 8-11 (4 is archived, 11 tabled)
   const db = window.LINKBOARD_DATA || {
     Items: [
       {
@@ -35,6 +35,7 @@
         Type: "Capability",
         Item: "The team is alerted to production errors",
         Children: [],
+        Shelved: "Archived",
       },
       {
         id: 5,
@@ -42,7 +43,7 @@
         Item: "Survey preview page",
         Status: "In Progress",
         Assignees: ["MK"],
-        Children: [8, 9],
+        Children: [8, 9, 11],
       },
       {
         id: 6,
@@ -74,6 +75,13 @@
         Target_Note: "Before the pilot",
       },
       { id: 10, Type: "Task", Item: "Draft copy", Status: "Not Started" },
+      {
+        id: 11,
+        Type: "Task",
+        Item: "Preview on mobile",
+        Status: "Not Started",
+        Shelved: "Tabled",
+      },
     ],
     // Start/End are Grist dates: seconds since 1970 (UTC midnight)
     Sprints: [

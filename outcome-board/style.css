@@ -182,6 +182,15 @@ input {
   background: #cfeedd;
   color: #1d6b45;
 }
+/* a shelved item (Tabled or Archived), when shown */
+.shelved {
+  opacity: 0.55;
+}
+.pill.shelf {
+  background: none;
+  border: 1px dashed currentColor;
+  font-style: italic;
+}
 .copies {
   position: absolute;
   top: 6px;

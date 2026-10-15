@@ -16,6 +16,8 @@ import {
   FIELDS,
   DUE_FIELDS,
   URGENCY,
+  SHELVED,
+  shelvedOf,
   canParent,
   LABEL,
   plural,
@@ -46,10 +48,18 @@ import {
 // ---- Rendering -------------------------------------------------------------------------------------
 const q = () => $("#search").value.trim().toLowerCase();
 const hideDone = () => $("#hideDone").checked;
+const hideShelved = () => $("#hideShelved").checked;
 const hidePool = () => $("#hidePool").checked;
 export const matches = (x) => !q() || x.name.toLowerCase().includes(q());
 export const doneOf = (x) => x.row[CFG.I.status] === DONE;
-export const visible = (x) => !(hideDone() && doneOf(x));
+export const visible = (x) =>
+  !(hideDone() && doneOf(x)) && !(hideShelved() && shelvedOf(x));
+// a shelved item (when shown) is drawn faded, with a Tabled or Archived tag
+export const shelfClass = (x) => (shelvedOf(x) ? " shelved" : "");
+export const shelfHTML = (x) =>
+  shelvedOf(x)
+    ? `<span class="pill shelf">${esc(x.row[CFG.I.shelved])}</span>`
+    : "";
 // true if any shown task (by id) matches the filter; lets a deliverable be found by its tasks
 const taskHit = (ids) =>
   ids.some((t) => visible(S.T.get(t)) && matches(S.T.get(t)));
@@ -99,7 +109,7 @@ const month = (sec) => dateText(sec, { month: "short", year: "numeric" });
 const firstOfMonth = (sec) => utc(sec).getUTCDate() === 1;
 const lastOfMonth = (sec) => utc(sec + DAY).getUTCDate() === 1;
 // When an item is due: "Due Nov 10", "Due Oct 2026", "Due Dec 2026 - Jan 2027", "Due Mar 2027 or
-// later", and/or its timing note. Red once the due-by day has passed, unless it's done.
+// later", and/or its timing note. Red once the due-by day has passed, unless it's done or shelved.
 export function dueHTML(x) {
   const from = num(x.row[CFG.I.targetFrom]),
     by = num(x.row[CFG.I.targetDate]),
@@ -116,7 +126,8 @@ export function dueHTML(x) {
   const text = [when && `Due ${when}`, note && (when ? `(${note})` : note)]
     .filter(Boolean)
     .join(" ");
-  const late = by && !doneOf(x) && by + DAY <= Date.now() / 1000;
+  const late =
+    by && !doneOf(x) && !shelvedOf(x) && by + DAY <= Date.now() / 1000;
   return text
     ? `<span class="due${late ? " late" : ""}"${late ? ' title="Overdue"' : ""}>${esc(text)}</span>`
     : "";
@@ -251,20 +262,20 @@ const sprintsHTML = (type, x) =>
   `<div class="sprints"><span class="label">Sprints</span>${pills(x, true)}${sprintMenu(type, x)}</div>`;
 
 export function delHTML(d, cap, xTitle = "Remove from this capability") {
-  const tasks = d.kids.T.map((t) => S.T.get(t)),
+  const tasks = d.kids.T.map((t) => S.T.get(t)).filter((t) => !shelvedOf(t)),
     done = tasks.filter(doneOf).length;
   const st = d.row[CFG.I.status] || "";
-  return `<div class="del${paneIs("D", d.id) ? " open" : ""}" data-drag tabindex="0" data-type="D" data-id="${d.id}" data-parent="${cap}" data-status="${esc(st)}"${urgAttr(d.row[CFG.I.urgency])}>
+  return `<div class="del${shelfClass(d)}${paneIs("D", d.id) ? " open" : ""}" data-drag tabindex="0" data-type="D" data-id="${d.id}" data-parent="${cap}" data-status="${esc(st)}"${urgAttr(d.row[CFG.I.urgency])}>
     ${esc(d.name)}${copies(d)}${dueHTML(d)}
-    <div class="meta">${tasks.length ? `<span>${done}/${tasks.length} tasks</span>` : ""}${st ? `<span>${esc(st)}</span>` : ""}${optHTML(cap, d.id)}${whoHTML(d)}${pills(d)}</div>${metrics(d)}
+    <div class="meta">${tasks.length ? `<span>${done}/${tasks.length} tasks</span>` : ""}${st ? `<span>${esc(st)}</span>` : ""}${shelfHTML(d)}${optHTML(cap, d.id)}${whoHTML(d)}${pills(d)}</div>${metrics(d)}
     ${cap ? `<button class="x" data-unlink title="${xTitle}" aria-label="${xTitle}">×</button>` : ""}</div>`;
 }
 
 // A task shown on its own (directly under a card or list, or in a sprint): a small row. Clicking it
 // opens its parent's side pane (its own, if it has no parent).
 export const trowHTML = (t, parent, xTitle) =>
-  `<div class="trow${doneOf(t) ? " done" : ""}${paneIs("T", t.id) ? " open" : ""}" data-drag tabindex="0" data-type="T" data-id="${t.id}" data-parent="${parent}">
-    <input type="checkbox" data-check${doneOf(t) ? " checked" : ""} aria-label="Done"><span class="name">${esc(t.name)}</span>${dueHTML(t)}${optHTML(parent, t.id)}${whoHTML(t)}${xTitle ? `<button class="x" data-unlink title="${xTitle}" aria-label="${xTitle}">×</button>` : ""}</div>`;
+  `<div class="trow${doneOf(t) ? " done" : ""}${shelfClass(t)}${paneIs("T", t.id) ? " open" : ""}" data-drag tabindex="0" data-type="T" data-id="${t.id}" data-parent="${parent}">
+    <input type="checkbox" data-check${doneOf(t) ? " checked" : ""} aria-label="Done"><span class="name">${esc(t.name)}</span>${dueHTML(t)}${shelfHTML(t)}${optHTML(parent, t.id)}${whoHTML(t)}${xTitle ? `<button class="x" data-unlink title="${xTitle}" aria-label="${xTitle}">×</button>` : ""}</div>`;
 
 // A card's or outcome list's own deliverables and tasks (linked directly, skipping a level)
 export function directDelsHTML(p, xTitle) {
@@ -289,17 +300,17 @@ export function capHTML(c, out, xTitle = "Remove from this outcome") {
   const filtering = q() && !matches(c); // card is only here for its matching deliverables/tasks
   if (filtering && !shown.length && !ownT.some(matches)) return "";
   const cst = c.row[CFG.I.status] || "";
-  if (hideDone() && cst === DONE) return "";
+  if (!visible(c)) return "";
   const open = ui.expanded.has(ekey(out, c.id)) || !!filtering;
   const list = filtering ? shown : dels;
   const urg = [...dels, ...ownT]
-    .filter((d) => !doneOf(d))
+    .filter((d) => !doneOf(d) && !shelvedOf(d))
     .map((d) => d.row[CFG.I.urgency])
     .sort((x, y) => urgRank(y) - urgRank(x))[0];
-  return `<div class="cap${paneIs("C", c.id) ? " open" : ""}" data-drag tabindex="0" data-type="C" data-id="${c.id}" data-parent="${out}"${urgAttr(urg)}>
+  return `<div class="cap${shelfClass(c)}${paneIs("C", c.id) ? " open" : ""}" data-drag tabindex="0" data-type="C" data-id="${c.id}" data-parent="${out}"${urgAttr(urg)}>
     <div class="cap-title"><button class="chev" data-toggle aria-expanded="${open}" aria-label="${open ? "Collapse" : "Expand"}">${open ? "▾" : "▸"}</button>${esc(c.name)}</div>${dueHTML(c)}
     ${copies(c)}
-    <div class="meta"><span>${plural(dels.length, "D")}</span>${ownT.length ? `<span>${plural(ownT.length, "T")}</span>` : ""}${optHTML(out, c.id)}
+    <div class="meta"><span>${plural(dels.length, "D")}</span>${ownT.length ? `<span>${plural(ownT.length, "T")}</span>` : ""}${shelfHTML(c)}${optHTML(out, c.id)}
 
       ${cst ? `<span class="pill${cst === DONE ? " ok" : ""}">${cst === DONE ? "✓ Available" : esc(cst)}</span>` : ""}
       ${c.row[CFG.I.proposed] ? `<span class="pill">${esc(c.row[CFG.I.proposed])}</span>` : ""}${whoHTML(c)}${pills(c)}</div>
@@ -314,6 +325,11 @@ export function capHTML(c, out, xTitle = "Remove from this outcome") {
     ${out ? `<button class="x" data-unlink title="${xTitle}" aria-label="${xTitle}">×</button>` : ""}</div>`;
 }
 
+// choice fields whose blank is a choice too: [choices, what the blank is called]
+const WITH_BLANK = {
+  urgency: [URGENCY, "Normal"],
+  shelved: [["", ...SHELVED], "No"],
+};
 function renderPane() {
   const pane = $("#pane"),
     p = ui.pane;
@@ -340,13 +356,14 @@ function renderPane() {
       input = `<input type="text" data-field="${col}" value="${esc(v)}">`;
     else {
       const list = Array.isArray(kind),
+        [choices, blank] = WITH_BLANK[kind] || [kind],
         opts = list
           ? [...kind, ...(v && !kind.includes(v) ? [v] : [])]
-          : URGENCY;
+          : choices;
       input = `<select data-field="${col}">${list && !v ? `<option value="" selected></option>` : ""}${opts
         .map(
           (o) =>
-            `<option value="${esc(o)}"${o === v ? " selected" : ""}>${esc(o || "Normal")}</option>`,
+            `<option value="${esc(o)}"${o === v ? " selected" : ""}>${esc(o || blank)}</option>`,
         )
         .join("")}</select>`;
     }
@@ -392,9 +409,9 @@ function renderPane() {
             const u = t.row[CFG.I.urgency] || "";
             if (confirming("T", t.id))
               return `<div class="task" data-type="T" data-id="${t.id}" data-parent="${x.id}">${confirmHTML(ui.confirm)}</div>`;
-            return `<div class="task${doneOf(t) ? " done" : ""}${q() && matches(t) ? " hit" : ""}" data-drag tabindex="0" data-type="T" data-id="${t.id}" data-parent="${x.id}">
+            return `<div class="task${doneOf(t) ? " done" : ""}${shelfClass(t)}${q() && matches(t) ? " hit" : ""}" data-drag tabindex="0" data-type="T" data-id="${t.id}" data-parent="${x.id}">
         <input type="checkbox" data-check ${doneOf(t) ? "checked" : ""} aria-label="Done">
-        ${ui.draft?.id === t.id ? draftHTML(LABEL.T, ui.draft.text) : `<span class="name">${esc(t.name)}</span>${optHTML(x.id, t.id)}${whoHTML(t)}`}
+        ${ui.draft?.id === t.id ? draftHTML(LABEL.T, ui.draft.text) : `<span class="name">${esc(t.name)}</span>${shelfHTML(t)}${optHTML(x.id, t.id)}${whoHTML(t)}`}
         <button class="urg" data-urg data-u="${esc(u)}" title="Urgency: ${esc(u || "Normal")} (click to change)" aria-label="Urgency: ${esc(u || "Normal")}"></button>
         <input class="teff" type="number" step="any" data-teffort value="${esc(num(t.row[CFG.I.effortEstimate]) ?? "")}" placeholder="effort" aria-label="Effort">
         <span class="tsprints">${dueHTML(t)}${assignMenu(t)}${S.hasSprints ? sprintMenu("T", t) + pills(t, true) : ""}</span>
@@ -1170,6 +1187,7 @@ function afterRender() {
 // ---- Toolbar ---------------------------------------------------------------------------------------
 $("#search").addEventListener("input", render);
 $("#hideDone").addEventListener("change", render);
+$("#hideShelved").addEventListener("change", render);
 $("#hidePool").addEventListener("change", render);
 $("#expandAll").addEventListener("click", () => {
   document

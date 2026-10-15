@@ -24,6 +24,7 @@ export const CFG = {
     note: "Review_Note",
     proposed: "Proposed_By",
     sprints: "Sprints", // two-way with Sprints.Items
+    shelved: "Shelved", // blank, or one of SHELVED
     // when it's due: by a date, from a date (the earliest it could be), and/or a note ("Ongoing")
     targetDate: "Target_Date",
     targetFrom: "Target_From",
@@ -54,30 +55,38 @@ export const TYPES = {
 };
 // people's initials: the Items.Assignees choices (also in the grist repo's bin/extend_schema.py)
 export const PEOPLE = ["MK", "DR"];
+// Items.Shelved choices (also in bin/extend_schema.py); blank means not shelved. A shelved item is
+// hidden unless "Hide shelved" is unticked, and is left out of its parents' roll-ups and sprints.
+export const SHELVED = ["Tabled", "Archived"];
+export const shelvedOf = (x) => !!x.row[CFG.I.shelved];
 export const tableOf = (type) => (type === "SP" ? CFG.SP : CFG.I).table;
 // Items have Impact/Effort (shown), *_Rollup (formula) and *_Estimate (entered).
 // Editable fields in the side pane, per level: [column, label, kind]
 const STATUSES = ["Not Started", "In Progress", "Review", "Done"]; // a done capability shows as "Available"
 const SPRINT_STATUSES = ["Planned", "Active", "Completed"];
-// kind: "number", "urgency", "date", "text", or a list of choices
+// kind: "number", "urgency", "shelved", "date", "text", or a list of choices
 export const FIELDS = {
   O: [
     ["Status", "Status", STATUSES],
+    ["Shelved", "Shelved", "shelved"],
     ["Impact_Estimate", "Impact", "number"],
   ],
   C: [
     ["Status", "Status", STATUSES],
+    ["Shelved", "Shelved", "shelved"],
     ["Impact_Estimate", "Impact estimate", "number"],
     ["Effort_Estimate", "Effort estimate", "number"],
   ],
   D: [
     ["Status", "Status", STATUSES],
+    ["Shelved", "Shelved", "shelved"],
     ["Urgency", "Urgency", "urgency"],
     ["Impact_Estimate", "Impact estimate", "number"],
     ["Effort_Estimate", "Effort estimate", "number"],
   ],
   T: [
     ["Status", "Status", STATUSES],
+    ["Shelved", "Shelved", "shelved"],
     ["Urgency", "Urgency", "urgency"],
     ["Effort_Estimate", "Effort estimate", "number"],
   ],
@@ -265,6 +274,7 @@ function loadSprints(table, next) {
         const p = next.all.get(pid),
           add = (sid, src) =>
             x.own.has(sid) || x.via.has(sid) || x.via.set(sid, src);
+        if (shelvedOf(p)) continue; // it doesn't bring what's under it into its sprints
         p.own.forEach((sid) => add(sid, { type: p.type, item: p }));
         p.via.forEach((src, sid) => add(sid, src));
       }

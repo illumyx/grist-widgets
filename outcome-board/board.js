@@ -13,6 +13,8 @@ import {
   paneIs,
   pills,
   poolHTML,
+  shelfClass,
+  shelfHTML,
   visible,
   whoHTML,
 } from "./view.js";
@@ -24,9 +26,9 @@ function laneHTML(o) {
       .filter((k) => k === "C" || o.kids[k].length)
       .map((k) => plural(o.kids[k].length, k))
       .join(" · ");
-  return `<section class="lane">
+  return `<section class="lane${shelfClass(o)}">
     <div class="lane-head${paneIs("O", o.id) ? " open" : ""}" tabindex="0" data-type="O" data-id="${o.id}" data-parent="0" data-drag title="Drag to reorder">${esc(o.name)}${dueHTML(o)}
-      <span class="sub">${counts}${imp !== null && imp !== undefined ? ` · impact ${imp}` : ""}</span>${whoHTML(o)}${pills(o)}</div>
+      <span class="sub">${counts}${imp !== null && imp !== undefined ? ` · impact ${imp}` : ""}</span>${shelfHTML(o)}${whoHTML(o)}${pills(o)}</div>
     <div class="lane-body" data-drop="C" data-parent="${o.id}">${o.kids.C.map((c) => capHTML(S.C.get(c), o.id)).join("")}
       ${directDelsHTML(o, "Remove from this outcome")}${directTasksHTML(o, "Remove from this outcome")}
       ${addItemHTML(`O${o.id}`, ["C", "D", "T"], o.id)}</div></section>`;
