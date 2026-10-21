@@ -33,6 +33,7 @@ import {
   paneIs,
   doneOf,
   visible,
+  whoHTML,
   matches,
   hit,
   poolHTML,
@@ -48,7 +49,7 @@ const X = "Remove from this sprint",
 
 const outcomeHTML = (o, sp) =>
   `<div class="ocard${shelfClass(o)}${paneIs("O", o.id) ? " open" : ""}" data-drag tabindex="0" data-type="O" data-id="${o.id}" data-parent="${sp.id}">${esc(o.name)}${dueHTML(o)}
-    <div class="meta"><span>${plural(o.kids.C.length, "C")}</span>${shelfHTML(o)}</div>${xButton}</div>`;
+    <div class="meta"><span>${plural(o.kids.C.length, "C")}</span>${shelfHTML(o)}${whoHTML(o)}</div>${xButton}</div>`;
 
 function sprintHTML(sp) {
   const k = sp.kids,

@@ -130,13 +130,31 @@ export function dueHTML(x) {
     ? `<span class="due${late ? " late" : ""}"${late ? ' title="Overdue"' : ""}>${esc(text)}</span>`
     : "";
 }
-// the initials of the people an item is assigned to
-export const whoHTML = (x) =>
-  assigneesOf(x)
-    .map(
+// The people on an item: its own assignees, then those on anything shown under it (assignment says
+// who will act, so a parent is on whatever its children are). Hide done and Hide shelved decide
+// what's shown.
+const peopleOn = (x) => {
+  const all = new Set(assigneesOf(x));
+  for (const id of x.children) {
+    const c = S.all.get(id);
+    if (visible(c)) peopleOn(c).forEach((p) => all.add(p));
+  }
+  return all;
+};
+// the initials of the people an item is assigned to, then (faded) of the others on what's under it
+export const whoHTML = (x) => {
+  const own = assigneesOf(x),
+    via = [...peopleOn(x)].filter((p) => !own.includes(p));
+  return [
+    ...own.map(
       (p) => `<span class="who" title="Assigned to ${esc(p)}">${esc(p)}</span>`,
-    )
-    .join("");
+    ),
+    ...via.map(
+      (p) =>
+        `<span class="who via" title="${esc(p)} is on something under it">${esc(p)}</span>`,
+    ),
+  ].join("");
+};
 // "Assign..." menu for a task in the checklist; picking a person assigns or unassigns them
 const assignMenu = (t) =>
   `<select data-assign aria-label="Assign"><option value="">Assign...</option>${S.people.map((p) => `<option value="${esc(p)}">${assigneesOf(t).includes(p) ? "✓ " : ""}${esc(p)}</option>`).join("")}</select>`;

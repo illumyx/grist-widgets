@@ -42,6 +42,8 @@ and clicking a deliverable opens its task checklist. Every link is many-to-many.
 - Assign an item to people with the side pane's Assigned boxes, or a task with its "Assign..." menu in the checklist
   (pick a name again to unassign). Their initials show on the card, note, or row. The people are the choices of the
   Items.Assignees column in Grist: add a choice there to add a person.
+- Assignment says who will act, so it rolls up: after its own initials, a card, note, or outcome header shows (faded)
+  the initials of the others on anything shown under it. "Hide done" and "Hide shelved" decide what's shown.
 - Edit a name at the top of the side pane (Enter saves, Esc cancels); double-click a task to rename it.
 - Tasks: tick to mark done, click the small square to cycle urgency (normal / yellow / red), type an effort.
   A blank effort reads as 0 in Grist, so 0 means "not estimated" (e.g. the sprint progress bars then count items).

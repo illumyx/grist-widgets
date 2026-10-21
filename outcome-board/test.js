@@ -1,11 +1,11 @@
 /* In-browser tests for the boards -- dragging notes, shelved (tabled or archived) items, the
- * collapsible pool, and who items can be assigned to -- run
+ * collapsible pool, and who items can be assigned to (and who's on what's under them) -- run
  * against the demo data in mock.js. Nothing to install: serve the folder (cd outcome-board &&
  * python -m http.server 8000) and open http://localhost:8000/index.html?test and
  * http://localhost:8000/sprints.html?test -- the results show at the top of the page. The tests
  * change the demo data, so reload to run them again. */
 
-import { S, ui } from "./core.js";
+import { S, ui, sprintLink } from "./core.js";
 
 const $ = (s) => document.querySelector(s);
 const settle = () => new Promise((r) => setTimeout(r, 50)); // let a change save and redraw
@@ -52,6 +52,11 @@ function dragTo(el, target) {
   release(...to);
 }
 const strip = () => $("#board .lane.unlinked.closed");
+// the initials on a card, note, or outcome header (not on the notes inside it), "~" marking faded ones
+const who = (el) =>
+  [...el.querySelectorAll(":scope > .meta > .who, :scope > .who")]
+    .map((w) => (w.classList.contains("via") ? "~" : "") + w.textContent)
+    .join();
 // click the pool's collapse button, and say if it's now a strip
 async function closePool() {
   $("#board .lane.unlinked .pool-x").click();
@@ -79,6 +84,7 @@ async function run() {
   await shelvedTests();
   await poolTests();
   await peopleTests();
+  await inheritedTests();
 }
 
 // Outcome board. Demo data: capability 2 holds deliverable 5; capability 3 holds 5 and 6 (which has
@@ -272,6 +278,32 @@ async function peopleTests() {
   );
 }
 
+// Outcome board, after peopleTests: outcome 1 holds capabilities 2 (with deliverable 6, now SU's) and
+// 3 (with deliverable 5, MK's, whose done task 8 is DR's).
+async function inheritedTests() {
+  const cap = (id) => $(`#board .cap[data-id="${id}"]`);
+  check(
+    "a card shows, faded, the people on what's under it",
+    who(cap(2)) === "~SU",
+  );
+  check(
+    "... after its own, and from more than one level down",
+    who(del(3, 5)) === "MK,~DR" && who(cap(3)) === "~MK,~DR",
+  );
+  check(
+    "... up to the outcome",
+    who($('#board .lane-head[data-id="1"]')) === "~SU,~MK,~DR",
+  );
+  $("#hideDone").click();
+  await settle();
+  check(
+    "the people on hidden (done) items aren't counted",
+    who(del(3, 5)) === "MK" && who(cap(3)) === "~MK",
+  );
+  $("#hideDone").click();
+  await settle();
+}
+
 // Sprints page. Demo data: capability 4 (archived) is in the pool; Sprint 2 holds capability 2, so
 // also its deliverable 5 and 5's tasks 8 (done), 9, and 11 (tabled); and task 10.
 async function sprintsTests() {
@@ -297,6 +329,14 @@ async function sprintsTests() {
   check(
     "dropping on the collapsed pool takes an item out of its sprint",
     !S.SP.get(2).items.includes(10),
+  );
+
+  // an outcome in a sprint shows the people on what's under it (task 8, DR's, is done: hidden here)
+  sprintLink(3, "O", 1, true);
+  await settle();
+  check(
+    "an outcome card in a sprint shows the people under it",
+    who($('#board .lane.sprint .ocard[data-id="1"]')) === "~MK",
   );
 }
 
