@@ -50,8 +50,11 @@ const hideDone = () => $("#hideDone").checked;
 const hideShelved = () => $("#hideShelved").checked;
 export const matches = (x) => !q() || x.name.toLowerCase().includes(q());
 export const doneOf = (x) => x.row[CFG.I.status] === DONE;
-export const visible = (x) =>
+// not hidden by Hide done or Hide shelved
+const unhidden = (x) =>
   !(hideDone() && doneOf(x)) && !(hideShelved() && shelvedOf(x));
+// shown: not hidden, and (if the person menu picks someone) on the way to what it picks (see whoHit)
+export const visible = (x) => unhidden(x) && whoHit(x);
 // a shelved item (when shown) is drawn faded, with a Tabled or Archived tag
 export const shelfClass = (x) => (shelvedOf(x) ? " shelved" : "");
 export const shelfHTML = (x) =>
@@ -137,7 +140,7 @@ const peopleOn = (x) => {
   const all = new Set(assigneesOf(x));
   for (const id of x.children) {
     const c = S.all.get(id);
-    if (visible(c)) peopleOn(c).forEach((p) => all.add(p));
+    if (unhidden(c)) peopleOn(c).forEach((p) => all.add(p));
   }
   return all;
 };
@@ -155,6 +158,33 @@ export const whoHTML = (x) => {
     ),
   ].join("");
 };
+// The toolbar's person menu: Anyone (""), a person's initials, or Unassigned.
+const UNASSIGNED = "(none)";
+const who = () => $("#who").value;
+// The item itself matches the person menu: that person is assigned to it, or (Unassigned) nobody is
+// on it or under it.
+const whoSelf = (x) =>
+  who() === UNASSIGNED ? !peopleOn(x).size : assigneesOf(x).includes(who());
+// Shown by the person menu: it, or anything shown under it, matches (so a card shows for what's
+// under it).
+const whoHit = (x) =>
+  !who() ||
+  whoSelf(x) ||
+  x.children.some((id) => unhidden(S.all.get(id)) && whoHit(S.all.get(id)));
+// Fill the person menu with Anyone, each person, and Unassigned (only when the people change).
+function whoMenu() {
+  const menu = $("#who"),
+    values = ["", ...S.people, UNASSIGNED];
+  if ([...menu.options].map((o) => o.value).join() === values.join()) return;
+  const was = menu.value;
+  menu.innerHTML = values
+    .map(
+      (v) =>
+        `<option value="${esc(v)}">${esc(v === "" ? "Anyone" : v === UNASSIGNED ? "Unassigned" : v)}</option>`,
+    )
+    .join("");
+  menu.value = values.includes(was) ? was : "";
+}
 // "Assign..." menu for a task in the checklist; picking a person assigns or unassigns them
 const assignMenu = (t) =>
   `<select data-assign aria-label="Assign"><option value="">Assign...</option>${S.people.map((p) => `<option value="${esc(p)}">${assigneesOf(t).includes(p) ? "✓ " : ""}${esc(p)}</option>`).join("")}</select>`;
@@ -313,7 +343,8 @@ export function capHTML(c, out, xTitle = "Remove from this outcome") {
   const dels = c.kids.D.map((d) => S.D.get(d)).filter(visible);
   const shown = dels.filter(hit);
   const ownT = c.kids.T.map((t) => S.T.get(t)).filter(visible);
-  const filtering = q() && !matches(c); // card is only here for its matching deliverables/tasks
+  // the card is only here for its matching deliverables/tasks (by name, or by person)
+  const filtering = (q() && !matches(c)) || (who() && !whoSelf(c));
   if (filtering && !shown.length && !ownT.some(matches)) return "";
   const cst = c.row[CFG.I.status] || "";
   if (!visible(c)) return "";
@@ -415,8 +446,9 @@ function renderPane() {
       ${S.hasSprints && L !== "SP" ? sprintsHTML(L, x) : ""}
       ${note ? `<div class="pane-note">${esc(note)}</div>` : ""}</div>`;
   if (L !== "SP" && L !== "T") {
-    // the task checklist: a deliverable's tasks, or a capability's or outcome's direct ones (if any)
-    const tasks = x.kids.T.map((t) => S.T.get(t)).filter(visible);
+    // the task checklist: a deliverable's tasks, or a capability's or outcome's direct ones (if any).
+    // It lists them all (unless hidden by Hide done or Hide shelved); the filters only highlight.
+    const tasks = x.kids.T.map((t) => S.T.get(t)).filter(unhidden);
     if (L === "D" || tasks.length)
       html += `<div class="tasks" data-drop="T" data-parent="${x.id}">
       ${
@@ -425,7 +457,7 @@ function renderPane() {
             const u = t.row[CFG.I.urgency] || "";
             if (confirming("T", t.id))
               return `<div class="task" data-type="T" data-id="${t.id}" data-parent="${x.id}">${confirmHTML(ui.confirm)}</div>`;
-            return `<div class="task${doneOf(t) ? " done" : ""}${shelfClass(t)}${q() && matches(t) ? " hit" : ""}" data-drag tabindex="0" data-type="T" data-id="${t.id}" data-parent="${x.id}">
+            return `<div class="task${doneOf(t) ? " done" : ""}${shelfClass(t)}${(q() || who()) && matches(t) && (!who() || whoSelf(t)) ? " hit" : ""}" data-drag tabindex="0" data-type="T" data-id="${t.id}" data-parent="${x.id}">
         <input type="checkbox" data-check ${doneOf(t) ? "checked" : ""} aria-label="Done">
         ${ui.draft?.id === t.id ? draftHTML(LABEL.T, ui.draft.text) : `<span class="name">${esc(t.name)}</span>${shelfHTML(t)}${optHTML(x.id, t.id)}${whoHTML(t)}`}
         <button class="urg" data-urg data-u="${esc(u)}" title="Urgency: ${esc(u || "Normal")} (click to change)" aria-label="Urgency: ${esc(u || "Normal")}"></button>
@@ -1187,6 +1219,7 @@ export function drawBoard(html) {
 
 // After a page draws its notes: re-mark the selection, draw the side pane, restore focus.
 function afterRender() {
+  whoMenu();
   if (ui.sel) {
     const el = findEl(ui.sel);
     if (el) el.classList.add("selected");
@@ -1212,6 +1245,7 @@ function afterRender() {
 $("#search").addEventListener("input", render);
 $("#hideDone").addEventListener("change", render);
 $("#hideShelved").addEventListener("change", render);
+$("#who").addEventListener("change", render);
 $("#expandAll").addEventListener("click", () => {
   document
     .querySelectorAll("#board .cap")

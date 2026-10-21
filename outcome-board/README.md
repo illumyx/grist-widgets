@@ -49,6 +49,9 @@ and clicking a deliverable opens its task checklist. Every link is many-to-many.
   A blank effort reads as 0 in Grist, so 0 means "not estimated" (e.g. the sprint progress bars then count items).
 - Yellow/red banners show Elevated/High urgency; a capability shows the highest urgency among its open deliverables.
 - The filter matches capability, deliverable, and task names; matching tasks are highlighted in the side pane.
+- The person menu next to it shows what someone is on: the items assigned to them, and the lists, cards, and notes
+  they sit in (a card shown only for what's under it opens to show it). "Unassigned" shows the items nobody is on or
+  under, and what they sit in. Both filters apply together; in the side pane, matching tasks are highlighted.
 - The pool stays in place while the other lists scroll sideways. Its ‹ button collapses it to a slim strip (on both
   pages); click the strip to open it again. Notes dropped on the strip land in the pool, as usual.
 - When it's due (side pane): "Due by" a date, "Due from" the earliest it could be due (a range with both; on

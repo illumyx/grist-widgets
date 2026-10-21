@@ -44,12 +44,15 @@ input {
   background: var(--lane);
   border-bottom: 1px solid #c9d1d8;
 }
-.toolbar input[type="search"] {
-  width: 240px;
+.toolbar input[type="search"],
+.toolbar select {
   padding: 5px 8px;
   border: 1px solid #b8c2cb;
   border-radius: 4px;
   background: #fff;
+}
+.toolbar input[type="search"] {
+  width: 240px;
 }
 .toolbar button {
   padding: 4px 10px;

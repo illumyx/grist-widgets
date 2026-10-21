@@ -1,5 +1,6 @@
 /* In-browser tests for the boards -- dragging notes, shelved (tabled or archived) items, the
- * collapsible pool, and who items can be assigned to (and who's on what's under them) -- run
+ * collapsible pool, who items can be assigned to, who's on what's under them, and the person
+ * menu -- run
  * against the demo data in mock.js. Nothing to install: serve the folder (cd outcome-board &&
  * python -m http.server 8000) and open http://localhost:8000/index.html?test and
  * http://localhost:8000/sprints.html?test -- the results show at the top of the page. The tests
@@ -63,12 +64,20 @@ async function closePool() {
   await settle();
   return !!strip() && !$("#board .lane.unlinked .lane-body");
 }
-// choose a value in one of the side pane's menus, as if picked by hand
-function choose(field, value) {
-  const menu = $(`#pane select[data-field="${field}"]`);
+// choose a value in a menu, as if picked by hand
+function chooseIn(menu, value) {
   menu.value = value;
   menu.dispatchEvent(new Event("change", { bubbles: true }));
 }
+// ... in one of the side pane's menus
+const choose = (field, value) =>
+  chooseIn($(`#pane select[data-field="${field}"]`), value);
+// ... in the toolbar's person menu, by its label (Anyone, initials, Unassigned)
+const showFor = (label) =>
+  chooseIn(
+    $("#who"),
+    [...$("#who").options].find((o) => o.text === label).value,
+  );
 
 const results = [];
 function check(name, ok) {
@@ -85,6 +94,7 @@ async function run() {
   await poolTests();
   await peopleTests();
   await inheritedTests();
+  await whoFilterTests();
 }
 
 // Outcome board. Demo data: capability 2 holds deliverable 5; capability 3 holds 5 and 6 (which has
@@ -304,6 +314,50 @@ async function inheritedTests() {
   await settle();
 }
 
+// Outcome board, after inheritedTests (see there). Deliverable 5 also has task 9, and deliverable
+// 6 task 10, neither of them assigned.
+async function whoFilterTests() {
+  const cap = (id) => $(`#board .cap[data-id="${id}"]`);
+  check(
+    "the person menu lists Anyone, the people, and Unassigned",
+    [...$("#who").options].map((o) => o.text).join() ===
+      "Anyone,MK,DR,SU,Unassigned",
+  );
+  $("#collapseAll").click();
+  showFor("SU");
+  await settle();
+  check("picking a person shows only what they're on", !!cap(2) && !cap(3));
+  check("... opening a card that's there for what's under it", !!del(2, 6));
+  showFor("DR");
+  await settle();
+  check("... which can be further down (task 8, done)", !!del(3, 5) && !cap(2));
+  $("#hideDone").click();
+  await settle();
+  check("... unless it's hidden", !$('#board .lane-head[data-id="1"]'));
+  $("#hideDone").click();
+  showFor("Unassigned");
+  await settle();
+  check(
+    "Unassigned shows what has an unassigned item under it",
+    !!del(3, 5) && !!del(2, 6),
+  );
+  del(3, 5).click();
+  await settle();
+  check(
+    "... and highlights, without hiding, unassigned tasks in the side pane",
+    $('#pane .task[data-id="9"]').classList.contains("hit") &&
+      !$('#pane .task[data-id="8"]').classList.contains("hit"),
+  );
+  del(2, 6).click();
+  await settle();
+  chooseIn($('#pane .task[data-id="10"] select[data-assign]'), "MK");
+  await settle();
+  check("... and hides what's all assigned", !cap(2) && !!cap(3));
+  showFor("Anyone");
+  await settle();
+  check("Anyone shows everything again", !!cap(2) && !!cap(3));
+}
+
 // Sprints page. Demo data: capability 4 (archived) is in the pool; Sprint 2 holds capability 2, so
 // also its deliverable 5 and 5's tasks 8 (done), 9, and 11 (tabled); and task 10.
 async function sprintsTests() {
@@ -337,6 +391,17 @@ async function sprintsTests() {
   check(
     "an outcome card in a sprint shows the people under it",
     who($('#board .lane.sprint .ocard[data-id="1"]')) === "~MK",
+  );
+
+  // the person menu: Sprint 3 now holds outcome 1 (MK is on deliverable 5, under it) and
+  // deliverable 6 (nobody's)
+  const inSprint = (sel) => !!$(`#board .lane.sprint ${sel}`),
+    before = inSprint('.del[data-id="6"]');
+  showFor("MK");
+  await settle();
+  check(
+    "the person menu works here too",
+    before && inSprint('.ocard[data-id="1"]') && !inSprint('.del[data-id="6"]'),
   );
 }
 
