@@ -5,8 +5,7 @@ and clicking a deliverable opens its task checklist. Every link is many-to-many.
 
 - Levels can be skipped: an outcome list can also hold deliverables and tasks directly (after its
   capability cards), and a capability its own tasks (after its deliverables). Those tasks are small rows;
-  clicking one opens its parent's side pane, which lists them like a deliverable's checklist (with an
-  "Add a task" box). A child is always at a lower level than its parent; the board won't drop or paste
+  the parent's side pane lists them like a deliverable's checklist (with an "Add a task" box). A child is always at a lower level than its parent; the board won't drop or paste
   it anywhere else.
 - Drag a note to move it: between lists, between capability cards, or onto any card, note, or list that
   can hold it (dropped anywhere in an outcome list, a deliverable or task goes directly under the outcome).
@@ -22,7 +21,9 @@ and clicking a deliverable opens its task checklist. Every link is many-to-many.
 - "+ Add item" (at the bottom of an outcome list, an expanded capability, the pool, or a sprint) adds a new item
   there: pick its type with the chips (or Alt+O/C/D/T; it remembers the last one), type a name, Enter. The box
   stays open for the next one; Esc closes it, and so does clicking away (adding what was typed).
-- Clicking a task with no parent opens its own side pane (type, status, urgency, effort, assigned, sprints).
+- Clicking a task (a row on the page, or its name in a side pane's checklist; or Enter) opens its own side pane
+  (type, status, shelved, urgency, effort, assigned, when it's due, sprints). The parent chips at the top of a side
+  pane open the parent's.
 - Keys: arrows move between notes (up/down within a list or the task list, left/right across lists);
   Space expands a capability or opens/closes a deliverable's side pane; Enter opens the side pane.
 - ×N means the note appears in N places; hovering outlines the other copies.
@@ -31,7 +32,7 @@ and clicking a deliverable opens its task checklist. Every link is many-to-many.
   "Hide shelved" (ticked to start, on both pages) hides shelved items and what's drawn under them; unticked, they show
   faded, with a Tabled or Archived tag. A shelved item isn't counted in its deliverable's tasks, its capability's
   urgency, a sprint's progress, or (in Grist) its parents' roll-ups; it isn't shown as late; and it doesn't bring
-  what's under it into its sprints. (A task in a checklist has no side pane of its own: shelve it in Grist.)
+  what's under it into its sprints.
 - Click an outcome header, capability, or deliverable to open its details in the side pane: type, status, urgency,
   impact/effort estimates, and when it's due. "~8" means the number is an estimate; plain "8" is rolled up from linked items.
 - The side pane's Type changes an item's level (e.g. a deliverable into a task). Levels it can't take are
@@ -44,7 +45,7 @@ and clicking a deliverable opens its task checklist. Every link is many-to-many.
   Items.Assignees column in Grist: add a choice there to add a person.
 - Assignment says who will act, so it rolls up: after its own initials, a card, note, or outcome header shows (faded)
   the initials of the others on anything shown under it. "Hide done" and "Hide shelved" decide what's shown.
-- Edit a name at the top of the side pane (Enter saves, Esc cancels); double-click a task to rename it.
+- Edit a name at the top of the side pane (Enter saves, Esc cancels).
 - Tasks: tick to mark done, click the small square to cycle urgency (normal / yellow / red), type an effort.
   A blank effort reads as 0 in Grist, so 0 means "not estimated" (e.g. the sprint progress bars then count items).
 - Yellow/red banners show Elevated/High urgency; a capability shows the highest urgency among its open deliverables.

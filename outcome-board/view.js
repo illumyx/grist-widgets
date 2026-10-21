@@ -222,7 +222,7 @@ const draftHTML = (label, text = "") =>
 export function addHTML(type, parent) {
   // "+ Add ..." button for a list (an outcome or sprint), or the new list being named in its place
   const d = ui.draft;
-  if (d && !d.id && d.type === type && d.parent === parent)
+  if (d && d.type === type && d.parent === parent)
     return `<section class="lane"><div class="lane-head">${draftHTML(LABEL[type], d.text)}</div></section>`;
   return `<button class="add-lane" data-add="${type}" data-parent="${parent}">+ Add ${LABEL[type]}</button>`;
 }
@@ -318,7 +318,7 @@ export function delHTML(d, cap, xTitle = "Remove from this capability") {
 }
 
 // A task shown on its own (directly under a card or list, or in a sprint): a small row. Clicking it
-// opens its parent's side pane (its own, if it has no parent).
+// opens its side pane.
 export const trowHTML = (t, parent, xTitle) =>
   `<div class="trow${doneOf(t) ? " done" : ""}${shelfClass(t)}${paneIs("T", t.id) ? " open" : ""}" data-drag tabindex="0" data-type="T" data-id="${t.id}" data-parent="${parent}">
     <input type="checkbox" data-check${doneOf(t) ? " checked" : ""} aria-label="Done"><span class="name">${esc(t.name)}</span>${dueHTML(t)}${shelfHTML(t)}${optHTML(parent, t.id)}${whoHTML(t)}${xTitle ? `<button class="x" data-unlink title="${xTitle}" aria-label="${xTitle}">×</button>` : ""}</div>`;
@@ -417,8 +417,9 @@ function renderPane() {
     return `<label class="field"><span>${label}</span>${input}</label>`;
   };
   // a parent's name, with a box to make the link to it optional
+  // a parent's name (click it to open its side pane), with a box to make the link to it optional
   const chip = (q) =>
-    `<span class="chip">${esc(nameOf(q))}${S.hasWeights ? ` <label title="Optional for “${esc(nameOf(q))}”"><input type="checkbox" data-optional="${q}"${isOptional(q, x.id) ? " checked" : ""}> optional</label>` : ""}</span>`;
+    `<span class="chip"><button type="button" data-open="${q}" title="Open “${esc(nameOf(q))}”">${esc(nameOf(q))}</button>${S.hasWeights ? ` <label title="Optional for “${esc(nameOf(q))}”"><input type="checkbox" data-optional="${q}"${isOptional(q, x.id) ? " checked" : ""}> optional</label>` : ""}</span>`;
   // Type: levels its parents and children don't allow are greyed out
   const typeField = () => {
     const ok = typesFor(x);
@@ -459,7 +460,7 @@ function renderPane() {
               return `<div class="task" data-type="T" data-id="${t.id}" data-parent="${x.id}">${confirmHTML(ui.confirm)}</div>`;
             return `<div class="task${doneOf(t) ? " done" : ""}${shelfClass(t)}${(q() || who()) && matches(t) && (!who() || whoSelf(t)) ? " hit" : ""}" data-drag tabindex="0" data-type="T" data-id="${t.id}" data-parent="${x.id}">
         <input type="checkbox" data-check ${doneOf(t) ? "checked" : ""} aria-label="Done">
-        ${ui.draft?.id === t.id ? draftHTML(LABEL.T, ui.draft.text) : `<span class="name">${esc(t.name)}</span>${shelfHTML(t)}${optHTML(x.id, t.id)}${whoHTML(t)}`}
+        <span class="name" title="Open this task">${esc(t.name)}</span>${shelfHTML(t)}${optHTML(x.id, t.id)}${whoHTML(t)}
         <button class="urg" data-urg data-u="${esc(u)}" title="Urgency: ${esc(u || "Normal")} (click to change)" aria-label="Urgency: ${esc(u || "Normal")}"></button>
         <input class="teff" type="number" step="any" data-teffort value="${esc(num(t.row[CFG.I.effortEstimate]) ?? "")}" placeholder="effort" aria-label="Effort">
         <span class="tsprints">${dueHTML(t)}${assignMenu(t)}${S.hasSprints ? sprintMenu("T", t) + pills(t, true) : ""}</span>
@@ -580,6 +581,13 @@ document.addEventListener("click", (e) => {
       ...sprintTarget(t),
       false,
     );
+  if (t.closest("[data-open]")) {
+    // a parent chip in the side pane: open that parent's side pane
+    const p = S.all.get(+t.closest("[data-open]").dataset.open);
+    ui.pane = { type: p.type, id: p.id };
+    ui.confirm = null;
+    return render();
+  }
   if (t.closest(".pane-head, .teff")) return;
   if (t.closest(".draft, .additem")) return;
   if (t.closest("[data-additem]")) {
@@ -629,14 +637,9 @@ document.addEventListener("click", (e) => {
   if (note) {
     select(note);
     const s = selOf(note);
-    if (s.type !== "T" && s.id) {
+    // a note on the page opens its side pane; a task in the side pane's checklist, its name
+    if (s.id && (!note.closest("#pane") || t.closest(".task .name"))) {
       ui.pane = { type: s.type, id: s.id };
-      ui.confirm = null;
-      render();
-    } else if (s.type === "T" && !note.closest("#pane")) {
-      // a task listed on the page (not in the side pane): open its (first) parent, else the task
-      const p = S.all.get(S.T.get(s.id).parents[0]) || S.T.get(s.id);
-      ui.pane = { type: p.type, id: p.id };
       ui.confirm = null;
       render();
     }
@@ -676,13 +679,8 @@ document.addEventListener("change", (e) => {
     return render();
   }
   if (el.matches("[data-settype]")) {
-    // a new task shows in its parent's side pane (its own, if it has no parent)
-    const x = S[ui.pane.type].get(ui.pane.id),
-      p = S.all.get(x.parents[0]);
-    ui.pane =
-      el.value === "T" && p
-        ? { type: p.type, id: p.id }
-        : { type: el.value, id: x.id };
+    const x = S[ui.pane.type].get(ui.pane.id);
+    ui.pane = { type: el.value, id: x.id }; // its side pane stays open
     return setType(x, el.value);
   }
   if (el.matches("[data-person]"))
@@ -718,15 +716,6 @@ document.addEventListener("input", (e) => {
   // grow the name box as you type
   if (e.target.matches("textarea.title, .draft")) grow(e.target);
   if (e.target.matches(".draft")) ui.draft.text = e.target.value;
-});
-
-document.addEventListener("dblclick", (e) => {
-  // double-click a task to rename it
-  const n = e.target.closest(".task .name");
-  if (!n) return;
-  const id = +noteOf(n).dataset.id;
-  ui.draft = { type: "T", id, text: S.T.get(id)?.name ?? "" };
-  render();
 });
 
 document.addEventListener("focusout", (e) => {
@@ -882,7 +871,8 @@ document.addEventListener("keydown", (e) => {
     ui.confirm = null;
     render();
   } else if (e.key === "Enter" && e.target.matches("[data-type]")) {
-    e.target.click();
+    // (a task in the side pane's checklist opens when its name is clicked)
+    (e.target.querySelector(":scope > .name") || e.target).click();
   }
 });
 

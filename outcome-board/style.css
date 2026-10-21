@@ -528,6 +528,10 @@ textarea.title:focus {
 }
 .task .name {
   flex: 1;
+  cursor: pointer; /* opens the task's side pane */
+}
+.task .name:hover {
+  text-decoration: underline;
 }
 .pane-note {
   font-size: 12px;
@@ -550,6 +554,18 @@ textarea.title:focus {
 .chip label {
   color: var(--muted);
   white-space: nowrap;
+}
+.chip [data-open] {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.chip [data-open]:hover {
+  text-decoration: underline;
 }
 .chip input {
   margin: 0 1px 0 4px;

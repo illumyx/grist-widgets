@@ -169,8 +169,7 @@ export const ui = {
   busy: false,
   adding: null, // the open "+ Add item" box: {key, parent, sprint, type, text}
   draft: null, // name being typed in place: {type, parent, text} for a new record (plus fields: extra
-  // columns to set; a new sprint also has forType/forId, the item whose menu it replaced), or with id
-  // to rename a task
+  // columns to set; a new sprint also has forType/forId, the item whose menu it replaced)
   confirm: null, // {type, id} of the item whose delete is waiting for confirmation
   showAll: false, // pool shows every item, not just unlinked ones ("Hide linked" unticked)
   hidePlanned: false, // pool leaves out items already in a planned or active sprint (sprints page)
@@ -524,14 +523,12 @@ export function addAction(type, name, parent, fields = {}) {
   ];
 }
 
-// Save the in-place draft: add the new record, or rename the task. A blank or unchanged name just closes it.
+// Save the in-place draft: add the new record. A blank name just closes it.
 export function saveDraft() {
   const d = ui.draft,
     name = d.text.trim();
   ui.draft = null;
-  if (!name || (d.id && name === S.T.get(d.id)?.name)) return render();
-  if (d.id)
-    return act([["UpdateRecord", CFG.I.table, d.id, { [CFG.I.name]: name }]]);
+  if (!name) return render();
   act([addAction(d.type, name, d.parent, d.fields)], `Added “${name}”.`);
 }
 
