@@ -35,7 +35,6 @@ import {
   setOptional,
   typesFor,
   setType,
-  PEOPLE,
   assigneesOf,
   toggleAssignee,
   tableOf,
@@ -140,7 +139,7 @@ export const whoHTML = (x) =>
     .join("");
 // "Assign..." menu for a task in the checklist; picking a person assigns or unassigns them
 const assignMenu = (t) =>
-  `<select data-assign aria-label="Assign"><option value="">Assign...</option>${PEOPLE.map((p) => `<option value="${esc(p)}">${assigneesOf(t).includes(p) ? "✓ " : ""}${esc(p)}</option>`).join("")}</select>`;
+  `<select data-assign aria-label="Assign"><option value="">Assign...</option>${S.people.map((p) => `<option value="${esc(p)}">${assigneesOf(t).includes(p) ? "✓ " : ""}${esc(p)}</option>`).join("")}</select>`;
 // marks a note whose link to the parent it's drawn under is optional
 const optHTML = (parent, id) =>
   isOptional(parent, id) ? `<span class="pill">optional</span>` : "";
@@ -385,7 +384,7 @@ function renderPane() {
   };
   // Assigned: a box per person
   const peopleField = () =>
-    `<div class="field"><span>Assigned</span><div class="people">${PEOPLE.map((p) => `<label><input type="checkbox" data-person="${esc(p)}"${assigneesOf(x).includes(p) ? " checked" : ""}> ${esc(p)}</label>`).join("")}</div></div>`;
+    `<div class="field"><span>Assigned</span><div class="people">${S.people.map((p) => `<label><input type="checkbox" data-person="${esc(p)}"${assigneesOf(x).includes(p) ? " checked" : ""}> ${esc(p)}</label>`).join("")}</div></div>`;
   const sum = [measure(x, "Impact"), measure(x, "Effort")]
     .filter(Boolean)
     .join(" · ");

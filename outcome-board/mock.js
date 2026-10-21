@@ -111,6 +111,16 @@
       },
     ],
     Link_weights: [], // a row (Parent, Child) makes that link optional
+    // Grist's own tables, the bits the board reads: the Items.Assignees choices are the people
+    _grist_Tables: [{ id: 1, tableId: "Items" }],
+    _grist_Tables_column: [
+      {
+        id: 1,
+        parentId: 1,
+        colId: "Assignees",
+        widgetOptions: JSON.stringify({ choices: ["MK", "DR", "SU"] }),
+      },
+    ],
   };
   const PAIRS = ALL_PAIRS.filter(([pt]) => db[pt]); // custom data may have no Sprints table
   const sync = () =>

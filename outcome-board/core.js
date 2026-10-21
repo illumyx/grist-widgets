@@ -17,7 +17,7 @@ export const CFG = {
     parents: "Parents", // two-way with Children
     status: "Status",
     urgency: "Urgency",
-    assignees: "Assignees", // a Choice List of PEOPLE
+    assignees: "Assignees", // a Choice List of people's initials (see peopleOf)
     impact: "Impact",
     effort: "Effort", // shown: rolled up from the children, else the estimate
     effortEstimate: "Effort_Estimate", // entered (a task's effort)
@@ -53,8 +53,6 @@ export const TYPES = {
   D: "Deliverable",
   T: "Task",
 };
-// people's initials: the Items.Assignees choices (also in the grist repo's bin/extend_schema.py)
-export const PEOPLE = ["MK", "DR"];
 // Items.Shelved choices (also in bin/extend_schema.py); blank means not shelved. A shelved item is
 // hidden unless "Hide shelved" is unticked, and is left out of its parents' roll-ups and sprints.
 export const SHELVED = ["Tabled", "Archived"];
@@ -181,10 +179,13 @@ export const ui = {
 
 // ---- Data ------------------------------------------------------------------------------------------
 async function load() {
-  const [items, sprints, weights] = await Promise.all([
+  const [items, sprints, weights, tables, columns] = await Promise.all([
     api.docApi.fetchTable(CFG.I.table),
     api.docApi.fetchTable(CFG.SP.table).catch(() => null), // no Sprints table yet: no sprints
     api.docApi.fetchTable(CFG.LW.table).catch(() => null), // no Link_weights: no optional links
+    // Grist's own tables, for the Assignees column's choices (see peopleOf)
+    api.docApi.fetchTable("_grist_Tables").catch(() => null),
+    api.docApi.fetchTable("_grist_Tables_column").catch(() => null),
   ]);
   // one map per level (items with no known Type are left out)
   const next = Object.fromEntries(LEVELS.map((k) => [k, new Map()]));
@@ -230,7 +231,23 @@ async function load() {
     const k = `${r[CFG.LW.parent]}:${r[CFG.LW.child]}`;
     next.optional.set(k, [...(next.optional.get(k) || []), r.id]);
   }
+  next.people = peopleOf(tables, columns);
   S = next;
+}
+
+// People's initials: the Items.Assignees column's choices in Grist, so adding a person is adding a
+// choice there. None if they can't be read (e.g. the local demo with its own data).
+function peopleOf(tables, columns) {
+  const t =
+      tables &&
+      columns &&
+      rowsOf(tables).find((r) => r.tableId === CFG.I.table),
+    c =
+      t &&
+      rowsOf(columns).find(
+        (r) => r.parentId === t.id && r.colId === CFG.I.assignees,
+      );
+  return (c?.widgetOptions && JSON.parse(c.widgetOptions).choices) || [];
 }
 
 // Sprints in start-date order. Each item gets own (ids of sprints listing it) and via (sprint id ->
@@ -446,7 +463,7 @@ export function toggleAssignee(x, person) {
   const was = assigneesOf(x),
     list = was.includes(person)
       ? was.filter((p) => p !== person)
-      : PEOPLE.filter((p) => p === person || was.includes(p));
+      : S.people.filter((p) => p === person || was.includes(p));
   act(
     [
       [

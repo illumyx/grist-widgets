@@ -1,5 +1,5 @@
-/* In-browser tests for the boards -- dragging notes, shelved (tabled or archived) items, and the
- * collapsible pool -- run
+/* In-browser tests for the boards -- dragging notes, shelved (tabled or archived) items, the
+ * collapsible pool, and who items can be assigned to -- run
  * against the demo data in mock.js. Nothing to install: serve the folder (cd outcome-board &&
  * python -m http.server 8000) and open http://localhost:8000/index.html?test and
  * http://localhost:8000/sprints.html?test -- the results show at the top of the page. The tests
@@ -78,6 +78,7 @@ async function run() {
   await dragTests();
   await shelvedTests();
   await poolTests();
+  await peopleTests();
 }
 
 // Outcome board. Demo data: capability 2 holds deliverable 5; capability 3 holds 5 and 6 (which has
@@ -243,6 +244,31 @@ async function poolTests() {
   check(
     "clicking the strip opens the pool",
     !strip() && !!$("#board .lane.unlinked .lane-body"),
+  );
+}
+
+// Outcome board, after poolTests: deliverable 6 is on capability 2, with task 10. The demo's
+// Assignees choices (in mock.js) are MK, DR, and SU.
+async function peopleTests() {
+  del(2, 6).click();
+  await settle();
+  const boxes = [...document.querySelectorAll("#pane [data-person]")];
+  check(
+    "the side pane's Assigned boxes are the Assignees choices in Grist",
+    boxes.map((b) => b.dataset.person).join() === "MK,DR,SU",
+  );
+  check(
+    "... and so is a checklist task's Assign menu",
+    [...$('#pane .task[data-id="10"] select[data-assign]').options]
+      .map((o) => o.value)
+      .join() === ",MK,DR,SU",
+  );
+  boxes[2].click();
+  await settle();
+  check(
+    "ticking a box assigns that person",
+    S.D.get(6).row.Assignees.includes("SU") &&
+      del(2, 6).querySelector(".who")?.textContent === "SU",
   );
 }
 
