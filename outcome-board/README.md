@@ -35,8 +35,11 @@ and clicking a deliverable opens its task checklist. Every link is many-to-many.
   what's under it into its sprints.
 - Click an outcome header, capability, or deliverable to open its details in the side pane: type, status, urgency,
   impact/effort estimates, and when it's due. "~8" means the number is an estimate; plain "8" is rolled up from linked items.
-- The side pane's Type changes an item's level (e.g. a deliverable into a task). Levels it can't take are
-  greyed out: it must stay below all of its parents and above all of its children.
+- The side pane's Type changes an item's level (e.g. a deliverable into a task). Levels its children can't sit under
+  are greyed out: it must stay above all of them. A level one of its parents can't hold is marked "(moves up)":
+  choosing it moves the item up past that parent, to the nearest item above that can hold it (e.g. a task in a
+  deliverable, made a deliverable, goes onto that deliverable's capability; with nothing above, an outcome becomes a
+  list of its own and anything else goes to the pool). The link to the parent it passed, and its "optional" mark, go.
 - Each parent chip in the side pane has an "optional" box: ticked, that link is optional (the item gets
   none of that parent's impact and isn't counted in its effort; see `doc/impact-allocation.md` in the
   grist repo), and the item shows "optional" where it's drawn under that parent. Unlinking clears it.

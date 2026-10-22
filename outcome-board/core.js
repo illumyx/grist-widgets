@@ -441,18 +441,47 @@ export function setOptional(parent, child, on) {
   );
 }
 
-// Levels an item could change to: below all of its parents and above all of its children.
+// Levels an item could change to: above all of its children. (A level one of its parents can't hold
+// moves it up: see parentsFor.)
 export const typesFor = (x) =>
-  LEVELS.filter(
-    (k) =>
-      x.parents.every((q) => canParent(S.all.get(q).type, k)) &&
-      x.children.every((c) => canParent(k, S.all.get(c).type)),
+  LEVELS.filter((k) =>
+    x.children.every((c) => canParent(k, S.all.get(c).type)),
   );
 
+// The parents an item would have at level k: each of its parents that can hold k, else the nearest
+// items above that parent that can. None: it becomes an outcome, or goes to the pool.
+export const parentsFor = (x, k) => {
+  const up = (id) =>
+    canParent(S.all.get(id).type, k) ? [id] : S.all.get(id).parents.flatMap(up);
+  return [...new Set(x.parents.flatMap(up))];
+};
+
+// Change an item's level, moving it up past the parents that can't hold the new one (its links to
+// them, and their optional marks, are dropped).
 export function setType(x, type) {
+  const to = parentsFor(x, type),
+    gone = x.parents.filter((p) => !to.includes(p)),
+    added = to.filter((p) => !x.parents.includes(p)),
+    where =
+      !gone.length || type === "O"
+        ? ""
+        : to.length
+          ? `, under ${to.map((p) => `“${nameOf(p)}”`).join(", ")}`
+          : ", in the pool";
   act(
-    [["UpdateRecord", CFG.I.table, x.id, { [CFG.I.type]: TYPES[type] }]],
-    `“${x.name}” is now a ${LABEL[type]}.`,
+    [
+      ["UpdateRecord", CFG.I.table, x.id, { [CFG.I.type]: TYPES[type] }],
+      ...gone.flatMap((p) => [
+        setKids(
+          x.type,
+          p,
+          kidsOf(x.type, p).filter((i) => i !== x.id),
+        ),
+        ...dropWeights(p, x.id),
+      ]),
+      ...added.map((p) => setKids(type, p, [...kidsOf(type, p), x.id])),
+    ],
+    `“${x.name}” is now ${type === "O" ? "an" : "a"} ${LABEL[type]}${where}.`,
   );
 }
 

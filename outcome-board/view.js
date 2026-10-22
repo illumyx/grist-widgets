@@ -34,6 +34,7 @@ import {
   isOptional,
   setOptional,
   typesFor,
+  parentsFor,
   setType,
   assigneesOf,
   toggleAssignee,
@@ -420,16 +421,20 @@ function renderPane() {
   // a parent's name (click it to open its side pane), with a box to make the link to it optional
   const chip = (q) =>
     `<span class="chip"><button type="button" data-open="${q}" title="Open “${esc(nameOf(q))}”">${esc(nameOf(q))}</button>${S.hasWeights ? ` <label title="Optional for “${esc(nameOf(q))}”"><input type="checkbox" data-optional="${q}"${isOptional(q, x.id) ? " checked" : ""}> optional</label>` : ""}</span>`;
-  // Type: levels its parents and children don't allow are greyed out
+  // Type: levels its children don't allow are greyed out; a level one of its parents can't hold is
+  // marked "(moves up)": choosing it moves the item up past that parent (see setType)
   const typeField = () => {
-    const ok = typesFor(x);
+    const ok = typesFor(x),
+      option = ([k, name]) => {
+        if (!ok.includes(k))
+          return `<option value="${k}" disabled title="It must be above its children">${name}</option>`;
+        const up = parentsFor(x, k).join() !== x.parents.join();
+        return `<option value="${k}"${k === L ? " selected" : ""}>${name}${up ? " (moves up)" : ""}</option>`;
+      };
     return `<label class="field"><span>Type</span><select data-settype>${Object.entries(
       TYPES,
     )
-      .map(
-        ([k, name]) =>
-          `<option value="${k}"${k === L ? " selected" : ""}${ok.includes(k) ? "" : ` disabled title="It must be below its parents and above its children"`}>${name}</option>`,
-      )
+      .map(option)
       .join("")}</select></label>`;
   };
   // Assigned: a box per person
