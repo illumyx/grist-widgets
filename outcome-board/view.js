@@ -1276,10 +1276,20 @@ $("#hideDone").addEventListener("change", render);
 $("#hideShelved").addEventListener("change", render);
 $("#who").addEventListener("change", render);
 $("#expandAll").addEventListener("click", () => {
-  document
-    .querySelectorAll("#board .cap")
-    .forEach((c) => ui.expanded.add(ekey(+c.dataset.parent, +c.dataset.id)));
-  render();
+  // Open every note that opens (capabilities, deliverables, outcome cards). What's inside a closed one
+  // isn't drawn until it opens, so open what's drawn and redraw until nothing new is left to open.
+  let opened = true;
+  while (opened) {
+    opened = false;
+    document.querySelectorAll("#board [data-toggle]").forEach((b) => {
+      const n = noteOf(b),
+        k = ekey(+n.dataset.parent, +n.dataset.id);
+      if (ui.expanded.has(k)) return;
+      ui.expanded.add(k);
+      opened = true;
+    });
+    render();
+  }
 });
 $("#collapseAll").addEventListener("click", () => {
   ui.expanded.clear();

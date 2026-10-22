@@ -27,6 +27,7 @@ many-to-many.
   pane open the parent's.
 - Keys: arrows move between notes (up/down within a list or the task list, left/right across lists);
   Space expands a capability or deliverable; Enter opens the side pane.
+- "Expand all" opens every capability, deliverable, and (on the sprints page) outcome card; "Collapse all" closes them.
 - ×N means the note appears in N places; hovering outlines the other copies.
 - Capabilities have a status (Not Started / In Progress / Review / Done); a done one shows as "Available", and "Hide done" hides it (and done outcome lists).
 - Any item can be shelved with the side pane's Shelved menu: Tabled (not now, maybe later) or Archived (dropped).

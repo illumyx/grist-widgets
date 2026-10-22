@@ -7,7 +7,7 @@
  * http://localhost:8000/sprints.html?test -- the results show at the top of the page. The tests
  * change the demo data, so reload to run them again. */
 
-import { S, ui, sprintLink } from "./core.js";
+import { S, ui, sprintLink, ekey, render } from "./core.js";
 
 const $ = (s) => document.querySelector(s);
 const settle = () => new Promise((r) => setTimeout(r, 50)); // let a change save and redraw
@@ -54,6 +54,13 @@ function dragTo(el, target) {
   release(...to);
 }
 const strip = () => $("#board .lane.unlinked.closed");
+// open the capability cards on the page (and not their deliverables, as Expand all would)
+function openCaps() {
+  document
+    .querySelectorAll("#board .cap")
+    .forEach((c) => ui.expanded.add(ekey(+c.dataset.parent, +c.dataset.id)));
+  render();
+}
 // the initials on a card, note, or outcome header (not on the notes inside it), "~" marking faded ones
 const who = (el) =>
   [...el.querySelectorAll(":scope > .meta > .who, :scope > .who")]
@@ -88,7 +95,7 @@ function check(name, ok) {
 async function run() {
   while (!$("#board .del")) await settle(); // the board has loaded
   if (document.body.classList.contains("sprints-page")) return sprintsTests();
-  $("#expandAll").click();
+  openCaps();
   await settle();
   await dragTests();
   await shelvedTests();
@@ -365,7 +372,7 @@ async function whoFilterTests() {
 // Outcome board, after whoFilterTests: deliverable 5 (on capability 3) has tasks 8 and 9 (and 11,
 // tabled, which is hidden).
 async function taskPaneTests() {
-  $("#expandAll").click();
+  openCaps();
   await settle();
   del(3, 5).click();
   await settle();
@@ -480,7 +487,6 @@ async function delTasksTests() {
   // with the filter matching task 10 and not the deliverable, it opens by itself to just that task
   $("#hideShelved").click(); // untick it, to show tabled task 9
   $("#collapseAll").click();
-  $("#expandAll").click();
   const search = $("#search");
   search.value = "draft";
   search.dispatchEvent(new Event("input"));
@@ -493,6 +499,14 @@ async function delTasksTests() {
   search.dispatchEvent(new Event("input"));
   $("#hideShelved").click();
   await settle();
+
+  $("#collapseAll").click();
+  $("#expandAll").click();
+  await settle();
+  check(
+    "Expand all opens deliverables, not just capabilities",
+    !!row(3, 5, 10),
+  );
 }
 
 // Sprints page. Demo data: capability 4 (archived) is in the pool; Sprint 2 holds capability 2, so
@@ -589,6 +603,16 @@ async function sprintsTests() {
   search.value = "";
   search.dispatchEvent(new Event("input"));
   await settle();
+
+  $("#collapseAll").click();
+  $("#expandAll").click();
+  await settle();
+  check(
+    "Expand all opens outcome cards, and what's in them",
+    !!card()?.querySelector(
+      '.cap[data-id="3"] .del[data-id="6"] .trow[data-id="10"]',
+    ),
+  );
 }
 
 // show the results at the top of the page (and in the console)
