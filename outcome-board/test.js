@@ -1,6 +1,6 @@
 /* In-browser tests for the boards -- dragging notes, shelved (tabled or archived) items, the
- * collapsible pool, who items can be assigned to, who's on what's under them, and the person
- * menu -- run
+ * collapsible pool, who items can be assigned to, who's on what's under them, the person menu,
+ * tasks' side panes, and changing an item's level -- run
  * against the demo data in mock.js. Nothing to install: serve the folder (cd outcome-board &&
  * python -m http.server 8000) and open http://localhost:8000/index.html?test and
  * http://localhost:8000/sprints.html?test -- the results show at the top of the page. The tests
@@ -95,6 +95,8 @@ async function run() {
   await peopleTests();
   await inheritedTests();
   await whoFilterTests();
+  await taskPaneTests();
+  await typeTests();
 }
 
 // Outcome board. Demo data: capability 2 holds deliverable 5; capability 3 holds 5 and 6 (which has
@@ -358,6 +360,99 @@ async function whoFilterTests() {
   check("Anyone shows everything again", !!cap(2) && !!cap(3));
 }
 
+// Outcome board, after whoFilterTests: deliverable 5 (on capability 3) has tasks 8 and 9 (and 11,
+// tabled, which is hidden).
+async function taskPaneTests() {
+  $("#expandAll").click();
+  await settle();
+  del(3, 5).click();
+  await settle();
+  $('#pane .task[data-id="8"] select[data-assign]').click();
+  await settle();
+  check(
+    "clicking a menu on a checklist task leaves the side pane as it is",
+    ui.pane?.type === "D" && ui.pane.id === 5,
+  );
+  $('#pane .task[data-id="9"] .name').click();
+  await settle();
+  check(
+    "clicking a checklist task's name opens its own side pane",
+    ui.pane?.type === "T" &&
+      ui.pane.id === 9 &&
+      !!$('#pane select[data-field="Shelved"]'),
+  );
+  choose("Shelved", "Tabled");
+  await settle();
+  check("... where it can be shelved", S.T.get(9).row.Shelved === "Tabled");
+  $('#pane .chip [data-open="5"]').click();
+  await settle();
+  check(
+    "a parent chip opens the parent's side pane",
+    ui.pane?.type === "D" && ui.pane.id === 5 && !$('#pane .task[data-id="9"]'),
+  );
+  const t8 = $('#pane .task[data-id="8"]');
+  t8.focus();
+  t8.dispatchEvent(
+    new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
+  );
+  await settle();
+  check(
+    "Enter on a checklist task opens it too",
+    ui.pane?.type === "T" && ui.pane.id === 8,
+  );
+}
+
+// Outcome board, after taskPaneTests: task 8's side pane is open. It's under deliverable 5, which is
+// on capability 3 ("A consultant can email respondents"), in outcome 1.
+async function typeTests() {
+  const types = () =>
+    [...$("#pane select[data-settype]").options]
+      .map((o) => (o.disabled ? "-" : "") + o.text)
+      .join();
+  check(
+    "a level its parent can't hold is marked (moves up)",
+    types() ===
+      "Outcome (moves up),Capability (moves up),Deliverable (moves up),Task",
+  );
+  $('#pane [data-optional="5"]').click();
+  await settle();
+  const marked = S.optional.has("5:8");
+  chooseIn($("#pane select[data-settype]"), "D");
+  await settle();
+  check(
+    "choosing it moves the item up past that parent",
+    S.D.get(8)?.parents.join() === "3" &&
+      !S.all.get(5).row.Children.includes(8) &&
+      ui.pane?.type === "D" &&
+      ui.pane.id === 8,
+  );
+  check(
+    "... drops the optional mark on the link it left",
+    marked && !S.optional.has("5:8"),
+  );
+  check(
+    "... and says where it went",
+    $("#toast").textContent.includes(
+      "is now a deliverable, under \u201cA consultant can email respondents",
+    ),
+  );
+  chooseIn($("#pane select[data-settype]"), "O");
+  await settle();
+  check(
+    "with nothing above that can hold it, it becomes an outcome list",
+    !!S.O.get(8) &&
+      !S.O.get(8).parents.length &&
+      ![...S.all.values()].some((y) => y.row.Children?.includes(8)) &&
+      !!$('#board .lane-head[data-id="8"]'),
+  );
+  del(3, 5).click();
+  await settle();
+  check(
+    "a level its children can't sit under is greyed out",
+    types() === "Outcome (moves up),Capability (moves up),Deliverable,-Task",
+  );
+}
+
 // Sprints page. Demo data: capability 4 (archived) is in the pool; Sprint 2 holds capability 2, so
 // also its deliverable 5 and 5's tasks 8 (done), 9, and 11 (tabled); and task 10.
 async function sprintsTests() {
@@ -375,6 +470,16 @@ async function sprintsTests() {
   $("#hideShelved").click();
   await settle();
   check("unticked, it shows, faded", pool('.cap[data-id="4"].shelved'));
+
+  // a task row opens the task's side pane (not its parent's)
+  $('#board .lane.sprint .trow[data-id="10"]').click();
+  await settle();
+  check(
+    "clicking a task row opens its own side pane",
+    ui.pane?.type === "T" && ui.pane.id === 10,
+  );
+  $("#pane [data-close]").click();
+  await settle();
 
   // dragging task 10 out of Sprint 2 onto the collapsed pool takes it out of the sprint
   check("the pool collapses here too", await closePool());
