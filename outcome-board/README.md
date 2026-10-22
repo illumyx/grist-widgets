@@ -1,7 +1,8 @@
 # Link board (Grist custom widget)
 
-Outcomes are lists, capabilities are sticky notes, deliverables are small notes on them,
-and clicking a deliverable opens its task checklist. Every link is many-to-many.
+Outcomes are lists, capabilities are sticky notes, deliverables are small notes on them, and tasks are rows
+in a deliverable (its arrow opens it; clicking it opens its side pane, with the task checklist). Every link is
+many-to-many.
 
 - Levels can be skipped: an outcome list can also hold deliverables and tasks directly (after its
   capability cards), and a capability its own tasks (after its deliverables). Those tasks are small rows;
@@ -25,7 +26,7 @@ and clicking a deliverable opens its task checklist. Every link is many-to-many.
   (type, status, shelved, urgency, effort, assigned, when it's due, sprints). The parent chips at the top of a side
   pane open the parent's.
 - Keys: arrows move between notes (up/down within a list or the task list, left/right across lists);
-  Space expands a capability or opens/closes a deliverable's side pane; Enter opens the side pane.
+  Space expands a capability or deliverable; Enter opens the side pane.
 - ×N means the note appears in N places; hovering outlines the other copies.
 - Capabilities have a status (Not Started / In Progress / Review / Done); a done one shows as "Available", and "Hide done" hides it (and done outcome lists).
 - Any item can be shelved with the side pane's Shelved menu: Tabled (not now, maybe later) or Archived (dropped).

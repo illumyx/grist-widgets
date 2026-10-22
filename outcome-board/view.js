@@ -308,13 +308,23 @@ const sprintTarget = (el) => {
 const sprintsHTML = (type, x) =>
   `<div class="sprints"><span class="label">Sprints</span>${pills(x, true)}${sprintMenu(type, x)}</div>`;
 
+// A deliverable note. Its arrow opens it to show its tasks as rows; it opens by itself when it's only
+// there for its tasks (they match a filter and it doesn't), showing just those.
 export function delHTML(d, cap, xTitle = "Remove from this capability") {
   const tasks = d.kids.T.map((t) => S.T.get(t)).filter((t) => !shelvedOf(t)),
     done = tasks.filter(doneOf).length;
   const st = d.row[CFG.I.status] || "";
+  const filtering = (q() && !matches(d)) || (who() && !whoSelf(d)),
+    open = ui.expanded.has(ekey(cap, d.id)) || !!filtering;
   return `<div class="del${shelfClass(d)}${paneIs("D", d.id) ? " open" : ""}" data-drag tabindex="0" data-type="D" data-id="${d.id}" data-parent="${cap}" data-status="${esc(st)}"${urgAttr(d.row[CFG.I.urgency])}>
-    ${esc(d.name)}${copies(d)}${dueHTML(d)}
+    <button class="chev" data-toggle aria-expanded="${open}" aria-label="${open ? "Collapse" : "Expand"}">${open ? "▾" : "▸"}</button>${esc(d.name)}${copies(d)}${dueHTML(d)}
     <div class="meta">${tasks.length ? `<span>${done}/${tasks.length} tasks</span>` : ""}${st ? `<span>${esc(st)}</span>` : ""}${shelfHTML(d)}${optHTML(cap, d.id)}${whoHTML(d)}${pills(d)}</div>${metrics(d)}
+    ${
+      open
+        ? directTasksHTML(d, "Remove from this deliverable", !!filtering) +
+          addItemHTML(`del${ekey(cap, d.id)}`, ["T"], d.id)
+        : ""
+    }
     ${cap ? `<button class="x" data-unlink title="${xTitle}" aria-label="${xTitle}">×</button>` : ""}</div>`;
 }
 
@@ -333,8 +343,10 @@ export function directDelsHTML(p, xTitle) {
     ? `<div class="dels" data-drop="D" data-parent="${p.id}">${dels.map((d) => delHTML(d, p.id, xTitle)).join("")}</div>`
     : "";
 }
-export function directTasksHTML(p, xTitle) {
-  const tasks = p.kids.T.map((t) => S.T.get(t)).filter(visible);
+export function directTasksHTML(p, xTitle, onlyMatches = false) {
+  const tasks = p.kids.T.map((t) => S.T.get(t))
+    .filter(visible)
+    .filter((t) => !onlyMatches || matches(t));
   return tasks.length
     ? `<div class="trows" data-drop="T" data-parent="${p.id}">${tasks.map((t) => trowHTML(t, p.id, xTitle)).join("")}</div>`
     : "";
@@ -859,14 +871,11 @@ document.addEventListener("keydown", (e) => {
     }
     e.preventDefault();
   } else if (e.key === " " && e.target.matches("[data-type]")) {
-    // Space: expand/collapse a capability, open/close a deliverable's side pane
+    // Space: expand/collapse a capability or deliverable
     const s = selOf(e.target);
-    if (s.type === "C") {
-      const k = ekey(s.parent, s.id);
-      ui.expanded.has(k) ? ui.expanded.delete(k) : ui.expanded.add(k);
-    } else if (s.type === "D")
-      ui.pane = paneIs("D", s.id) ? null : { type: "D", id: s.id };
-    else return;
+    if (s.type !== "C" && s.type !== "D") return;
+    const k = ekey(s.parent, s.id);
+    ui.expanded.has(k) ? ui.expanded.delete(k) : ui.expanded.add(k);
     select(e.target);
     render();
     e.preventDefault();

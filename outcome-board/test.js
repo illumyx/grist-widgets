@@ -1,6 +1,6 @@
 /* In-browser tests for the boards -- dragging notes, shelved (tabled or archived) items, the
  * collapsible pool, who items can be assigned to, who's on what's under them, the person menu,
- * tasks' side panes, and changing an item's level -- run
+ * tasks' side panes, changing an item's level, and tasks in deliverables -- run
  * against the demo data in mock.js. Nothing to install: serve the folder (cd outcome-board &&
  * python -m http.server 8000) and open http://localhost:8000/index.html?test and
  * http://localhost:8000/sprints.html?test -- the results show at the top of the page. The tests
@@ -97,6 +97,7 @@ async function run() {
   await whoFilterTests();
   await taskPaneTests();
   await typeTests();
+  await delTasksTests();
 }
 
 // Outcome board. Demo data: capability 2 holds deliverable 5; capability 3 holds 5 and 6 (which has
@@ -451,6 +452,46 @@ async function typeTests() {
     "a level its children can't sit under is greyed out",
     types() === "Outcome (moves up),Capability (moves up),Deliverable,-Task",
   );
+}
+
+// Outcome board, after typeTests: deliverable 6 (on capability 2) has task 10 ("Draft copy");
+// deliverable 5 (on capability 3) has tasks 9 and 11, both tabled.
+async function delTasksTests() {
+  const row = (cap, d, t) =>
+    del(cap, d)?.querySelector(`.trow[data-id="${t}"]`);
+  check("a deliverable starts closed", !!del(2, 6) && !row(2, 6, 10));
+  del(2, 6).querySelector("[data-toggle]").click();
+  await settle();
+  check("its arrow opens it, showing its tasks as rows", !!row(2, 6, 10));
+  dragTo(row(2, 6, 10), del(3, 5));
+  await settle();
+  check(
+    "a task row can be dragged onto another deliverable",
+    S.T.get(10).parents.join() === "5",
+  );
+  del(3, 5).focus();
+  del(3, 5).dispatchEvent(
+    new KeyboardEvent("keydown", { key: " ", bubbles: true }),
+  );
+  await settle();
+  check("Space opens a deliverable too", !!row(3, 5, 10));
+
+  // with the filter matching task 10 and not the deliverable, it opens by itself to just that task
+  $("#hideShelved").click(); // untick it, to show tabled task 9
+  $("#collapseAll").click();
+  $("#expandAll").click();
+  const search = $("#search");
+  search.value = "draft";
+  search.dispatchEvent(new Event("input"));
+  await settle();
+  check(
+    "a filter opens a deliverable to just its matching tasks",
+    !!row(3, 5, 10) && !row(3, 5, 9),
+  );
+  search.value = "";
+  search.dispatchEvent(new Event("input"));
+  $("#hideShelved").click();
+  await settle();
 }
 
 // Sprints page. Demo data: capability 4 (archived) is in the pool; Sprint 2 holds capability 2, so
