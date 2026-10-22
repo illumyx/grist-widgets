@@ -87,7 +87,9 @@ deliverables, and tasks as small rows), laid out like the pool; whatever is unde
 The header shows its dates (in bold under the name), status, and a progress bar (share of effort done among items with nothing under them, or of the items if any has no effort, leaving out shelved ones; hover for the numbers). Click it to edit the sprint
 (name, status, dates, notes) or delete it (its items are kept). "+ Add sprint" adds one.
 
-- The pool starts with every item; "Hide planned" leaves out items already in a planned or active sprint.
+- The pool starts with every item, outcomes first; "Hide planned" leaves out items already in a planned or active sprint.
+- Outcomes are cards here. Their arrow (or Space) opens one to show what its list on the outcome board holds: its
+  capability cards, then the deliverables and tasks linked to it directly. A filter opens it to what matches under it.
 - "Hide done" starts ticked here, and notes don't show sprint pills (the list they're in says which sprint).
 - Drag from the pool into a sprint to add an item; from one sprint to another to move it; back to the pool to
   take it out. Tasks can be dragged from the side pane. Within a sprint, drag an item up or down to reorder it

@@ -385,6 +385,27 @@ export function capHTML(c, out, xTitle = "Remove from this outcome") {
     ${out ? `<button class="x" data-unlink title="${xTitle}" aria-label="${xTitle}">×</button>` : ""}</div>`;
 }
 
+// An outcome on the sprints page (in the pool or a sprint): a card whose arrow opens it to show what
+// an outcome list on the board holds -- its capability cards, then the deliverables and tasks linked
+// to it directly. It opens by itself when it's only there for what's under it (that matches a filter
+// and it doesn't), showing just that.
+export function ocardHTML(o, parent, xTitle) {
+  const filtering = (q() && !matches(o)) || (who() && !whoSelf(o)),
+    open = ui.expanded.has(ekey(parent, o.id)) || !!filtering,
+    X = "Remove from this outcome",
+    body = open
+      ? o.kids.C.map((c) => capHTML(S.C.get(c), o.id)).join("") +
+        directDelsHTML(o, X) +
+        directTasksHTML(o, X, !!filtering)
+      : "";
+  if (filtering && !body) return ""; // only here for what's under it, and none of that is shown
+  return `<div class="ocard${shelfClass(o)}${paneIs("O", o.id) ? " open" : ""}" data-drag tabindex="0" data-type="O" data-id="${o.id}" data-parent="${parent}">
+    <button class="chev" data-toggle aria-expanded="${open}" aria-label="${open ? "Collapse" : "Expand"}">${open ? "▾" : "▸"}</button>${esc(o.name)}${dueHTML(o)}
+    <div class="meta"><span>${plural(o.kids.C.length, "C")}</span>${shelfHTML(o)}${whoHTML(o)}</div>
+    ${open ? `<div class="obody">${body}${addItemHTML(`oc${ekey(parent, o.id)}`, ["C", "D", "T"], o.id)}</div>` : ""}
+    ${xTitle ? `<button class="x" data-unlink title="${xTitle}" aria-label="${xTitle}">×</button>` : ""}</div>`;
+}
+
 // choice fields whose blank is a choice too: [choices, what the blank is called]
 const WITH_BLANK = {
   urgency: [URGENCY, "Normal"],
@@ -871,10 +892,10 @@ document.addEventListener("keydown", (e) => {
     }
     e.preventDefault();
   } else if (e.key === " " && e.target.matches("[data-type]")) {
-    // Space: expand/collapse a capability or deliverable
-    const s = selOf(e.target);
-    if (s.type !== "C" && s.type !== "D") return;
-    const k = ekey(s.parent, s.id);
+    // Space: expand/collapse a note that opens (a capability, deliverable, or outcome card)
+    if (!$("[data-toggle]", e.target)) return;
+    const s = selOf(e.target),
+      k = ekey(s.parent, s.id);
     ui.expanded.has(k) ? ui.expanded.delete(k) : ui.expanded.add(k);
     select(e.target);
     render();
@@ -1184,9 +1205,10 @@ document.addEventListener(
 );
 
 // The pool list: capabilities, then deliverables and tasks, like an outcome list's. note: the hint under
-// the title; extra: more header checkboxes. Its < button collapses it to a slim strip, which opens it
-// again when clicked; notes dropped on the strip land in the pool as usual.
-export function poolHTML(note, extra = "") {
+// the title; extra: more header checkboxes; first: notes to put before the capabilities (the sprints
+// page's outcome cards). Its < button collapses it to a slim strip, which opens it again when clicked;
+// notes dropped on the strip land in the pool as usual.
+export function poolHTML(note, extra = "", first = "") {
   if (ui.poolClosed)
     return `<section class="lane unlinked closed">
     <div class="lane-head" tabindex="0" data-type="O" data-id="0" data-parent="0" data-pool title="Show the pool"><span>›</span><span class="name">Pool</span></div></section>`;
@@ -1197,7 +1219,10 @@ export function poolHTML(note, extra = "") {
   return `<section class="lane unlinked">
     <div class="lane-head" tabindex="0" data-type="O" data-id="0" data-parent="0">Pool<button class="pool-x" data-pool title="Hide the pool" aria-label="Hide the pool">‹</button>
       <span class="sub">${note} <label class="toggle"><input type="checkbox" data-hidelinked${ui.showAll ? "" : " checked"}> Hide linked</label>${extra}</span></div>
-    <div class="lane-body" data-drop="C" data-parent="0">${kidsOf("C", 0)
+    <div class="lane-body" data-drop="C" data-parent="0">${first}${kidsOf(
+      "C",
+      0,
+    )
       .map((c) => capHTML(S.C.get(c), 0))
       .join("")}
       ${directDelsHTML({ id: 0, kids: { D: kidsOf("D", 0) } })}

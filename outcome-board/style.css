@@ -902,6 +902,14 @@ textarea.title:focus {
 .ocard .meta {
   font-weight: 400;
 }
+/* what an outcome card shows when it's open (view.js ocardHTML) */
+.ocard .obody {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 8px;
+  font-weight: 400;
+}
 .ocard.open,
 .trow.open {
   box-shadow: 0 0 0 2px var(--select);

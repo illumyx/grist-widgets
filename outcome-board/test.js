@@ -1,6 +1,7 @@
 /* In-browser tests for the boards -- dragging notes, shelved (tabled or archived) items, the
  * collapsible pool, who items can be assigned to, who's on what's under them, the person menu,
- * tasks' side panes, changing an item's level, and tasks in deliverables -- run
+ * tasks' side panes, changing an item's level, tasks in deliverables, and outcomes on the sprints
+ * page -- run
  * against the demo data in mock.js. Nothing to install: serve the folder (cd outcome-board &&
  * python -m http.server 8000) and open http://localhost:8000/index.html?test and
  * http://localhost:8000/sprints.html?test -- the results show at the top of the page. The tests
@@ -549,6 +550,45 @@ async function sprintsTests() {
     "the person menu works here too",
     before && inSprint('.ocard[data-id="1"]') && !inSprint('.del[data-id="6"]'),
   );
+
+  // outcomes act like other items here: in the pool, and cards that open
+  showFor("Anyone");
+  $("#board .lane.unlinked.closed .lane-head").click(); // open the pool again
+  await settle();
+  const inPool = () => $('#board .lane.unlinked .ocard[data-id="1"]');
+  check(
+    "the pool starts with the outcomes",
+    $("#board .lane.unlinked .lane-body").firstElementChild === inPool(),
+  );
+  dragTo(
+    inPool(),
+    $('#board .lane-head[data-type="SP"][data-id="2"]').nextElementSibling,
+  );
+  await settle();
+  check(
+    "an outcome can be dragged from the pool into a sprint",
+    S.SP.get(2).items.includes(1),
+  );
+  const card = () => $('#board .ocard[data-id="1"][data-parent="2"]');
+  card().querySelector("[data-toggle]").click();
+  await settle();
+  check(
+    "its arrow opens it to its capability cards",
+    !!card().querySelector('.cap[data-id="2"]') &&
+      !!card().querySelector('.cap[data-id="3"]'),
+  );
+  const search = $("#search");
+  search.value = "build a survey";
+  search.dispatchEvent(new Event("input"));
+  await settle();
+  check(
+    "a filter opens an outcome card to just what matches under it",
+    !!inPool()?.querySelector('.cap[data-id="2"]') &&
+      !inPool().querySelector('.cap[data-id="3"]'),
+  );
+  search.value = "";
+  search.dispatchEvent(new Event("input"));
+  await settle();
 }
 
 // show the results at the top of the page (and in the console)
