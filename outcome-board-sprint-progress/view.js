@@ -35,6 +35,7 @@ import {
   isOptional,
   setOptional,
   typesFor,
+  parentsFor,
   setType,
   assigneesOf,
   toggleAssignee,
@@ -193,11 +194,7 @@ const assignMenu = (t) =>
 const optHTML = (parent, id) =>
   isOptional(parent, id) ? `<span class="pill">optional</span>` : "";
 const urgRank = (u) => URGENCY.indexOf(u || "");
-// a small mark for an item's level before its name (a task has its checkbox instead)
-const ICON = { O: "◎", C: "▣", D: "◇" };
-export const typeHTML = (type) =>
-  `<span class="ticon" title="${LABEL[type]}" aria-hidden="true">${ICON[type]}</span>`;
-// urgency shows as ! (Elevated) or !! (High) before the name (not as a color: colors are statuses)
+// urgency shows as ! (Elevated) or !! (High) in a red chip before the name
 const URG_MARK = { Elevated: "!", High: "!!" };
 const urgHTML = (u, title = `Urgency: ${u}`) =>
   URG_MARK[u]
@@ -234,7 +231,7 @@ const draftHTML = (label, text = "") =>
 export function addHTML(type, parent) {
   // "+ Add ..." button for a list (an outcome or sprint), or the new list being named in its place
   const d = ui.draft;
-  if (d && !d.id && d.type === type && d.parent === parent)
+  if (d && d.type === type && d.parent === parent)
     return `<section class="lane"><div class="lane-head">${draftHTML(LABEL[type], d.text)}</div></section>`;
   return `<button class="add-lane" data-add="${type}" data-parent="${parent}">+ Add ${LABEL[type]}</button>`;
 }
@@ -319,18 +316,28 @@ const sprintTarget = (el) => {
 const sprintsHTML = (type, x) =>
   `<div class="sprints"><span class="label">Sprints</span>${pills(x, true)}${sprintMenu(type, x)}</div>`;
 
+// A deliverable note. Its arrow opens it to show its tasks as rows; it opens by itself when it's only
+// there for its tasks (they match a filter and it doesn't), showing just those.
 export function delHTML(d, cap, xTitle = "Remove from this capability") {
   const tasks = d.kids.T.map((t) => S.T.get(t)).filter((t) => !shelvedOf(t)),
     done = tasks.filter(doneOf).length;
   const st = d.row[CFG.I.status] || "";
+  const filtering = (q() && !matches(d)) || (who() && !whoSelf(d)),
+    open = ui.expanded.has(ekey(cap, d.id)) || !!filtering;
   return `<div class="del${shelfClass(d)}${paneIs("D", d.id) ? " open" : ""}" data-drag tabindex="0" data-type="D" data-id="${d.id}" data-parent="${cap}"${statusAttr(d)}>
-    ${typeHTML("D")}${urgHTML(d.row[CFG.I.urgency])}${esc(d.name)}${copies(d)}${dueHTML(d)}
+    <button class="chev" data-toggle aria-expanded="${open}" aria-label="${open ? "Collapse" : "Expand"}">${open ? "▾" : "▸"}</button>${urgHTML(d.row[CFG.I.urgency])}${esc(d.name)}${copies(d)}${dueHTML(d)}
     <div class="meta">${tasks.length ? `<span>${done}/${tasks.length} tasks</span>` : ""}${st ? `<span>${esc(st)}</span>` : ""}${shelfHTML(d)}${optHTML(cap, d.id)}${whoHTML(d)}${pills(d)}</div>${metrics(d)}
+    ${
+      open
+        ? directTasksHTML(d, "Remove from this deliverable", !!filtering) +
+          addItemHTML(`del${ekey(cap, d.id)}`, ["T"], d.id)
+        : ""
+    }
     ${cap ? `<button class="x" data-unlink title="${xTitle}" aria-label="${xTitle}">×</button>` : ""}</div>`;
 }
 
 // A task shown on its own (directly under a card or list, or in a sprint): a small row. Clicking it
-// opens its parent's side pane (its own, if it has no parent).
+// opens its side pane.
 export const trowHTML = (t, parent, xTitle) =>
   `<div class="trow${doneOf(t) ? " done" : ""}${shelfClass(t)}${paneIs("T", t.id) ? " open" : ""}" data-drag tabindex="0" data-type="T" data-id="${t.id}" data-parent="${parent}"${statusAttr(t)}>
     <input type="checkbox" data-check${doneOf(t) ? " checked" : ""} aria-label="Done"><span class="name">${urgHTML(t.row[CFG.I.urgency])}${esc(t.name)}</span>${dueHTML(t)}${shelfHTML(t)}${optHTML(parent, t.id)}${whoHTML(t)}${xTitle ? `<button class="x" data-unlink title="${xTitle}" aria-label="${xTitle}">×</button>` : ""}</div>`;
@@ -344,8 +351,10 @@ export function directDelsHTML(p, xTitle) {
     ? `<div class="dels" data-drop="D" data-parent="${p.id}">${dels.map((d) => delHTML(d, p.id, xTitle)).join("")}</div>`
     : "";
 }
-export function directTasksHTML(p, xTitle) {
-  const tasks = p.kids.T.map((t) => S.T.get(t)).filter(visible);
+export function directTasksHTML(p, xTitle, onlyMatches = false) {
+  const tasks = p.kids.T.map((t) => S.T.get(t))
+    .filter(visible)
+    .filter((t) => !onlyMatches || matches(t));
   return tasks.length
     ? `<div class="trows" data-drop="T" data-parent="${p.id}">${tasks.map((t) => trowHTML(t, p.id, xTitle)).join("")}</div>`
     : "";
@@ -367,7 +376,7 @@ export function capHTML(c, out, xTitle = "Remove from this outcome") {
     .map((d) => d.row[CFG.I.urgency])
     .sort((x, y) => urgRank(y) - urgRank(x))[0];
   return `<div class="cap${shelfClass(c)}${paneIs("C", c.id) ? " open" : ""}" data-drag tabindex="0" data-type="C" data-id="${c.id}" data-parent="${out}"${statusAttr(c)}>
-    <div class="cap-title"><button class="chev" data-toggle aria-expanded="${open}" aria-label="${open ? "Collapse" : "Expand"}">${open ? "▾" : "▸"}</button>${typeHTML("C")}${urgHTML(urg, `Most urgent under it: ${urg}`)}${esc(c.name)}</div>${dueHTML(c)}
+    <div class="cap-title"><button class="chev" data-toggle aria-expanded="${open}" aria-label="${open ? "Collapse" : "Expand"}">${open ? "▾" : "▸"}</button>${urgHTML(urg, `Most urgent under it: ${urg}`)}${esc(c.name)}</div>${dueHTML(c)}
     ${copies(c)}
     <div class="meta"><span>${plural(dels.length, "D")}</span>${ownT.length ? `<span>${plural(ownT.length, "T")}</span>` : ""}${shelfHTML(c)}${optHTML(out, c.id)}
 
@@ -382,6 +391,27 @@ export function capHTML(c, out, xTitle = "Remove from this outcome") {
         : ""
     }
     ${out ? `<button class="x" data-unlink title="${xTitle}" aria-label="${xTitle}">×</button>` : ""}</div>`;
+}
+
+// An outcome on the sprints page (in the pool or a sprint): a card whose arrow opens it to show what
+// an outcome list on the board holds -- its capability cards, then the deliverables and tasks linked
+// to it directly. It opens by itself when it's only there for what's under it (that matches a filter
+// and it doesn't), showing just that.
+export function ocardHTML(o, parent, xTitle) {
+  const filtering = (q() && !matches(o)) || (who() && !whoSelf(o)),
+    open = ui.expanded.has(ekey(parent, o.id)) || !!filtering,
+    X = "Remove from this outcome",
+    body = open
+      ? o.kids.C.map((c) => capHTML(S.C.get(c), o.id)).join("") +
+        directDelsHTML(o, X) +
+        directTasksHTML(o, X, !!filtering)
+      : "";
+  if (filtering && !body) return ""; // only here for what's under it, and none of that is shown
+  return `<div class="ocard${shelfClass(o)}${paneIs("O", o.id) ? " open" : ""}" data-drag tabindex="0" data-type="O" data-id="${o.id}" data-parent="${parent}"${statusAttr(o)}>
+    <button class="chev" data-toggle aria-expanded="${open}" aria-label="${open ? "Collapse" : "Expand"}">${open ? "▾" : "▸"}</button>${esc(o.name)}${dueHTML(o)}
+    <div class="meta"><span>${plural(o.kids.C.length, "C")}</span>${shelfHTML(o)}${whoHTML(o)}</div>
+    ${open ? `<div class="obody">${body}${addItemHTML(`oc${ekey(parent, o.id)}`, ["C", "D", "T"], o.id)}</div>` : ""}
+    ${xTitle ? `<button class="x" data-unlink title="${xTitle}" aria-label="${xTitle}">×</button>` : ""}</div>`;
 }
 
 // choice fields whose blank is a choice too: [choices, what the blank is called]
@@ -429,18 +459,23 @@ function renderPane() {
     return `<label class="field"><span>${label}</span>${input}</label>`;
   };
   // a parent's name, with a box to make the link to it optional
+  // a parent's name (click it to open its side pane), with a box to make the link to it optional
   const chip = (q) =>
-    `<span class="chip">${esc(nameOf(q))}${S.hasWeights ? ` <label title="Optional for “${esc(nameOf(q))}”"><input type="checkbox" data-optional="${q}"${isOptional(q, x.id) ? " checked" : ""}> optional</label>` : ""}</span>`;
-  // Type: levels its parents and children don't allow are greyed out
+    `<span class="chip"><button type="button" data-open="${q}" title="Open “${esc(nameOf(q))}”">${esc(nameOf(q))}</button>${S.hasWeights ? ` <label title="Optional for “${esc(nameOf(q))}”"><input type="checkbox" data-optional="${q}"${isOptional(q, x.id) ? " checked" : ""}> optional</label>` : ""}</span>`;
+  // Type: levels its children don't allow are greyed out; a level one of its parents can't hold is
+  // marked "(moves up)": choosing it moves the item up past that parent (see setType)
   const typeField = () => {
-    const ok = typesFor(x);
+    const ok = typesFor(x),
+      option = ([k, name]) => {
+        if (!ok.includes(k))
+          return `<option value="${k}" disabled title="It must be above its children">${name}</option>`;
+        const up = parentsFor(x, k).join() !== x.parents.join();
+        return `<option value="${k}"${k === L ? " selected" : ""}>${name}${up ? " (moves up)" : ""}</option>`;
+      };
     return `<label class="field"><span>Type</span><select data-settype>${Object.entries(
       TYPES,
     )
-      .map(
-        ([k, name]) =>
-          `<option value="${k}"${k === L ? " selected" : ""}${ok.includes(k) ? "" : ` disabled title="It must be below its parents and above its children"`}>${name}</option>`,
-      )
+      .map(option)
       .join("")}</select></label>`;
   };
   // Assigned: a box per person
@@ -471,7 +506,7 @@ function renderPane() {
               return `<div class="task" data-type="T" data-id="${t.id}" data-parent="${x.id}">${confirmHTML(ui.confirm)}</div>`;
             return `<div class="task${doneOf(t) ? " done" : ""}${shelfClass(t)}${(q() || who()) && matches(t) && (!who() || whoSelf(t)) ? " hit" : ""}" data-drag tabindex="0" data-type="T" data-id="${t.id}" data-parent="${x.id}"${statusAttr(t)}>
         <input type="checkbox" data-check${doneOf(t) ? " checked" : ""} aria-label="Done">
-        ${ui.draft?.id === t.id ? draftHTML(LABEL.T, ui.draft.text) : `<span class="name">${esc(t.name)}</span>${shelfHTML(t)}${optHTML(x.id, t.id)}${whoHTML(t)}`}
+        <span class="name" title="Open this task">${esc(t.name)}</span>${shelfHTML(t)}${optHTML(x.id, t.id)}${whoHTML(t)}
         <button class="urg" data-urg data-u="${esc(u)}" title="Urgency: ${esc(u || "Normal")} (click to change)" aria-label="Urgency: ${esc(u || "Normal")}">${URG_MARK[u] || ""}</button>
         <input class="teff" type="number" step="any" data-teffort value="${esc(num(t.row[CFG.I.effortEstimate]) ?? "")}" placeholder="effort" aria-label="Effort">
         <span class="tsprints">${dueHTML(t)}${assignMenu(t)}${S.hasSprints ? sprintMenu("T", t) + pills(t, true) : ""}</span>
@@ -592,6 +627,13 @@ document.addEventListener("click", (e) => {
       ...sprintTarget(t),
       false,
     );
+  if (t.closest("[data-open]")) {
+    // a parent chip in the side pane: open that parent's side pane
+    const p = S.all.get(+t.closest("[data-open]").dataset.open);
+    ui.pane = { type: p.type, id: p.id };
+    ui.confirm = null;
+    return render();
+  }
   if (t.closest(".pane-head, .teff")) return;
   if (t.closest(".draft, .additem")) return;
   if (t.closest("[data-additem]")) {
@@ -641,14 +683,9 @@ document.addEventListener("click", (e) => {
   if (note) {
     select(note);
     const s = selOf(note);
-    if (s.type !== "T" && s.id) {
+    // a note on the page opens its side pane; a task in the side pane's checklist, its name
+    if (s.id && (!note.closest("#pane") || t.closest(".task .name"))) {
       ui.pane = { type: s.type, id: s.id };
-      ui.confirm = null;
-      render();
-    } else if (s.type === "T" && !note.closest("#pane")) {
-      // a task listed on the page (not in the side pane): open its (first) parent, else the task
-      const p = S.all.get(S.T.get(s.id).parents[0]) || S.T.get(s.id);
-      ui.pane = { type: p.type, id: p.id };
       ui.confirm = null;
       render();
     }
@@ -688,13 +725,8 @@ document.addEventListener("change", (e) => {
     return render();
   }
   if (el.matches("[data-settype]")) {
-    // a new task shows in its parent's side pane (its own, if it has no parent)
-    const x = S[ui.pane.type].get(ui.pane.id),
-      p = S.all.get(x.parents[0]);
-    ui.pane =
-      el.value === "T" && p
-        ? { type: p.type, id: p.id }
-        : { type: el.value, id: x.id };
+    const x = S[ui.pane.type].get(ui.pane.id);
+    ui.pane = { type: el.value, id: x.id }; // its side pane stays open
     return setType(x, el.value);
   }
   if (el.matches("[data-person]"))
@@ -730,15 +762,6 @@ document.addEventListener("input", (e) => {
   // grow the name box as you type
   if (e.target.matches("textarea.title, .draft")) grow(e.target);
   if (e.target.matches(".draft")) ui.draft.text = e.target.value;
-});
-
-document.addEventListener("dblclick", (e) => {
-  // double-click a task to rename it
-  const n = e.target.closest(".task .name");
-  if (!n) return;
-  const id = +noteOf(n).dataset.id;
-  ui.draft = { type: "T", id, text: S.T.get(id)?.name ?? "" };
-  render();
 });
 
 document.addEventListener("focusout", (e) => {
@@ -877,14 +900,11 @@ document.addEventListener("keydown", (e) => {
     }
     e.preventDefault();
   } else if (e.key === " " && e.target.matches("[data-type]")) {
-    // Space: expand/collapse a capability, open/close a deliverable's side pane
-    const s = selOf(e.target);
-    if (s.type === "C") {
-      const k = ekey(s.parent, s.id);
-      ui.expanded.has(k) ? ui.expanded.delete(k) : ui.expanded.add(k);
-    } else if (s.type === "D")
-      ui.pane = paneIs("D", s.id) ? null : { type: "D", id: s.id };
-    else return;
+    // Space: expand/collapse a note that opens (a capability, deliverable, or outcome card)
+    if (!$("[data-toggle]", e.target)) return;
+    const s = selOf(e.target),
+      k = ekey(s.parent, s.id);
+    ui.expanded.has(k) ? ui.expanded.delete(k) : ui.expanded.add(k);
     select(e.target);
     render();
     e.preventDefault();
@@ -894,7 +914,8 @@ document.addEventListener("keydown", (e) => {
     ui.confirm = null;
     render();
   } else if (e.key === "Enter" && e.target.matches("[data-type]")) {
-    e.target.click();
+    // (a task in the side pane's checklist opens when its name is clicked)
+    (e.target.querySelector(":scope > .name") || e.target).click();
   }
 });
 
@@ -1192,9 +1213,10 @@ document.addEventListener(
 );
 
 // The pool list: capabilities, then deliverables and tasks, like an outcome list's. note: the hint under
-// the title; extra: more header checkboxes. Its < button collapses it to a slim strip, which opens it
-// again when clicked; notes dropped on the strip land in the pool as usual.
-export function poolHTML(note, extra = "") {
+// the title; extra: more header checkboxes; first: notes to put before the capabilities (the sprints
+// page's outcome cards). Its < button collapses it to a slim strip, which opens it again when clicked;
+// notes dropped on the strip land in the pool as usual.
+export function poolHTML(note, extra = "", first = "") {
   if (ui.poolClosed)
     return `<section class="lane unlinked closed">
     <div class="lane-head" tabindex="0" data-type="O" data-id="0" data-parent="0" data-pool title="Show the pool"><span>›</span><span class="name">Pool</span></div></section>`;
@@ -1205,7 +1227,10 @@ export function poolHTML(note, extra = "") {
   return `<section class="lane unlinked">
     <div class="lane-head" tabindex="0" data-type="O" data-id="0" data-parent="0">Pool<button class="pool-x" data-pool title="Hide the pool" aria-label="Hide the pool">‹</button>
       <span class="sub">${note} <label class="toggle"><input type="checkbox" data-hidelinked${ui.showAll ? "" : " checked"}> Hide linked</label>${extra}</span></div>
-    <div class="lane-body" data-drop="C" data-parent="0">${kidsOf("C", 0)
+    <div class="lane-body" data-drop="C" data-parent="0">${first}${kidsOf(
+      "C",
+      0,
+    )
       .map((c) => capHTML(S.C.get(c), 0))
       .join("")}
       ${directDelsHTML({ id: 0, kids: { D: kidsOf("D", 0) } })}
@@ -1259,10 +1284,20 @@ $("#hideDone").addEventListener("change", render);
 $("#hideShelved").addEventListener("change", render);
 $("#who").addEventListener("change", render);
 $("#expandAll").addEventListener("click", () => {
-  document
-    .querySelectorAll("#board .cap")
-    .forEach((c) => ui.expanded.add(ekey(+c.dataset.parent, +c.dataset.id)));
-  render();
+  // Open every note that opens (capabilities, deliverables, outcome cards). What's inside a closed one
+  // isn't drawn until it opens, so open what's drawn and redraw until nothing new is left to open.
+  let opened = true;
+  while (opened) {
+    opened = false;
+    document.querySelectorAll("#board [data-toggle]").forEach((b) => {
+      const n = noteOf(b),
+        k = ekey(+n.dataset.parent, +n.dataset.id);
+      if (ui.expanded.has(k)) return;
+      ui.expanded.add(k);
+      opened = true;
+    });
+    render();
+  }
 });
 $("#collapseAll").addEventListener("click", () => {
   ui.expanded.clear();

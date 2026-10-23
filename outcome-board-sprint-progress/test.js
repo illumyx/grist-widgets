@@ -1,12 +1,13 @@
 /* In-browser tests for the boards -- dragging notes, shelved (tabled or archived) items, the
- * collapsible pool, who items can be assigned to, who's on what's under them, and the person
- * menu -- run
+ * collapsible pool, who items can be assigned to, who's on what's under them, the person menu,
+ * tasks' side panes, changing an item's level, tasks in deliverables, and outcomes on the sprints
+ * page -- run
  * against the demo data in mock.js. Nothing to install: serve the folder (cd outcome-board &&
  * python -m http.server 8000) and open http://localhost:8000/index.html?test and
  * http://localhost:8000/sprints.html?test -- the results show at the top of the page. The tests
  * change the demo data, so reload to run them again. */
 
-import { S, ui, sprintLink } from "./core.js";
+import { S, ui, sprintLink, ekey, render } from "./core.js";
 
 const $ = (s) => document.querySelector(s);
 const settle = () => new Promise((r) => setTimeout(r, 50)); // let a change save and redraw
@@ -53,6 +54,13 @@ function dragTo(el, target) {
   release(...to);
 }
 const strip = () => $("#board .lane.unlinked.closed");
+// open the capability cards on the page (and not their deliverables, as Expand all would)
+function openCaps() {
+  document
+    .querySelectorAll("#board .cap")
+    .forEach((c) => ui.expanded.add(ekey(+c.dataset.parent, +c.dataset.id)));
+  render();
+}
 // the initials on a card, note, or outcome header (not on the notes inside it), "~" marking faded ones
 const who = (el) =>
   [...el.querySelectorAll(":scope > .meta > .who, :scope > .who")]
@@ -87,7 +95,7 @@ function check(name, ok) {
 async function run() {
   while (!$("#board .del")) await settle(); // the board has loaded
   if (document.body.classList.contains("sprints-page")) return sprintsTests();
-  $("#expandAll").click();
+  openCaps();
   await settle();
   await dragTests();
   await shelvedTests();
@@ -95,6 +103,9 @@ async function run() {
   await peopleTests();
   await inheritedTests();
   await whoFilterTests();
+  await taskPaneTests();
+  await typeTests();
+  await delTasksTests();
 }
 
 // Outcome board. Demo data: capability 2 holds deliverable 5; capability 3 holds 5 and 6 (which has
@@ -358,6 +369,146 @@ async function whoFilterTests() {
   check("Anyone shows everything again", !!cap(2) && !!cap(3));
 }
 
+// Outcome board, after whoFilterTests: deliverable 5 (on capability 3) has tasks 8 and 9 (and 11,
+// tabled, which is hidden).
+async function taskPaneTests() {
+  openCaps();
+  await settle();
+  del(3, 5).click();
+  await settle();
+  $('#pane .task[data-id="8"] select[data-assign]').click();
+  await settle();
+  check(
+    "clicking a menu on a checklist task leaves the side pane as it is",
+    ui.pane?.type === "D" && ui.pane.id === 5,
+  );
+  $('#pane .task[data-id="9"] .name').click();
+  await settle();
+  check(
+    "clicking a checklist task's name opens its own side pane",
+    ui.pane?.type === "T" &&
+      ui.pane.id === 9 &&
+      !!$('#pane select[data-field="Shelved"]'),
+  );
+  choose("Shelved", "Tabled");
+  await settle();
+  check("... where it can be shelved", S.T.get(9).row.Shelved === "Tabled");
+  $('#pane .chip [data-open="5"]').click();
+  await settle();
+  check(
+    "a parent chip opens the parent's side pane",
+    ui.pane?.type === "D" && ui.pane.id === 5 && !$('#pane .task[data-id="9"]'),
+  );
+  const t8 = $('#pane .task[data-id="8"]');
+  t8.focus();
+  t8.dispatchEvent(
+    new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
+  );
+  await settle();
+  check(
+    "Enter on a checklist task opens it too",
+    ui.pane?.type === "T" && ui.pane.id === 8,
+  );
+}
+
+// Outcome board, after taskPaneTests: task 8's side pane is open. It's under deliverable 5, which is
+// on capability 3 ("A consultant can email respondents"), in outcome 1.
+async function typeTests() {
+  const types = () =>
+    [...$("#pane select[data-settype]").options]
+      .map((o) => (o.disabled ? "-" : "") + o.text)
+      .join();
+  check(
+    "a level its parent can't hold is marked (moves up)",
+    types() ===
+      "Outcome (moves up),Capability (moves up),Deliverable (moves up),Task",
+  );
+  $('#pane [data-optional="5"]').click();
+  await settle();
+  const marked = S.optional.has("5:8");
+  chooseIn($("#pane select[data-settype]"), "D");
+  await settle();
+  check(
+    "choosing it moves the item up past that parent",
+    S.D.get(8)?.parents.join() === "3" &&
+      !S.all.get(5).row.Children.includes(8) &&
+      ui.pane?.type === "D" &&
+      ui.pane.id === 8,
+  );
+  check(
+    "... drops the optional mark on the link it left",
+    marked && !S.optional.has("5:8"),
+  );
+  check(
+    "... and says where it went",
+    $("#toast").textContent.includes(
+      "is now a deliverable, under \u201cA consultant can email respondents",
+    ),
+  );
+  chooseIn($("#pane select[data-settype]"), "O");
+  await settle();
+  check(
+    "with nothing above that can hold it, it becomes an outcome list",
+    !!S.O.get(8) &&
+      !S.O.get(8).parents.length &&
+      ![...S.all.values()].some((y) => y.row.Children?.includes(8)) &&
+      !!$('#board .lane-head[data-id="8"]'),
+  );
+  del(3, 5).click();
+  await settle();
+  check(
+    "a level its children can't sit under is greyed out",
+    types() === "Outcome (moves up),Capability (moves up),Deliverable,-Task",
+  );
+}
+
+// Outcome board, after typeTests: deliverable 6 (on capability 2) has task 10 ("Draft copy");
+// deliverable 5 (on capability 3) has tasks 9 and 11, both tabled.
+async function delTasksTests() {
+  const row = (cap, d, t) =>
+    del(cap, d)?.querySelector(`.trow[data-id="${t}"]`);
+  check("a deliverable starts closed", !!del(2, 6) && !row(2, 6, 10));
+  del(2, 6).querySelector("[data-toggle]").click();
+  await settle();
+  check("its arrow opens it, showing its tasks as rows", !!row(2, 6, 10));
+  dragTo(row(2, 6, 10), del(3, 5));
+  await settle();
+  check(
+    "a task row can be dragged onto another deliverable",
+    S.T.get(10).parents.join() === "5",
+  );
+  del(3, 5).focus();
+  del(3, 5).dispatchEvent(
+    new KeyboardEvent("keydown", { key: " ", bubbles: true }),
+  );
+  await settle();
+  check("Space opens a deliverable too", !!row(3, 5, 10));
+
+  // with the filter matching task 10 and not the deliverable, it opens by itself to just that task
+  $("#hideShelved").click(); // untick it, to show tabled task 9
+  $("#collapseAll").click();
+  const search = $("#search");
+  search.value = "draft";
+  search.dispatchEvent(new Event("input"));
+  await settle();
+  check(
+    "a filter opens a deliverable to just its matching tasks",
+    !!row(3, 5, 10) && !row(3, 5, 9),
+  );
+  search.value = "";
+  search.dispatchEvent(new Event("input"));
+  $("#hideShelved").click();
+  await settle();
+
+  $("#collapseAll").click();
+  $("#expandAll").click();
+  await settle();
+  check(
+    "Expand all opens deliverables, not just capabilities",
+    !!row(3, 5, 10),
+  );
+}
+
 // Sprints page. Demo data: capability 4 (archived) is in the pool; Sprint 2 holds capability 2, so
 // also its deliverable 5 and 5's tasks 8 (done), 9, and 11 (tabled); and task 10.
 async function sprintsTests() {
@@ -383,6 +534,16 @@ async function sprintsTests() {
   $("#hideShelved").click();
   await settle();
   check("unticked, it shows, faded", pool('.cap[data-id="4"].shelved'));
+
+  // a task row opens the task's side pane (not its parent's)
+  $('#board .lane.sprint .trow[data-id="10"]').click();
+  await settle();
+  check(
+    "clicking a task row opens its own side pane",
+    ui.pane?.type === "T" && ui.pane.id === 10,
+  );
+  $("#pane [data-close]").click();
+  await settle();
 
   // dragging task 10 out of Sprint 2 onto the collapsed pool takes it out of the sprint
   check("the pool collapses here too", await closePool());
@@ -414,6 +575,55 @@ async function sprintsTests() {
   check(
     "the person menu works here too",
     before && inSprint('.ocard[data-id="1"]') && !inSprint('.del[data-id="6"]'),
+  );
+
+  // outcomes act like other items here: in the pool, and cards that open
+  showFor("Anyone");
+  $("#board .lane.unlinked.closed .lane-head").click(); // open the pool again
+  await settle();
+  const inPool = () => $('#board .lane.unlinked .ocard[data-id="1"]');
+  check(
+    "the pool starts with the outcomes",
+    $("#board .lane.unlinked .lane-body").firstElementChild === inPool(),
+  );
+  dragTo(
+    inPool(),
+    $('#board .lane-head[data-type="SP"][data-id="2"]').nextElementSibling,
+  );
+  await settle();
+  check(
+    "an outcome can be dragged from the pool into a sprint",
+    S.SP.get(2).items.includes(1),
+  );
+  const card = () => $('#board .ocard[data-id="1"][data-parent="2"]');
+  card().querySelector("[data-toggle]").click();
+  await settle();
+  check(
+    "its arrow opens it to its capability cards",
+    !!card().querySelector('.cap[data-id="2"]') &&
+      !!card().querySelector('.cap[data-id="3"]'),
+  );
+  const search = $("#search");
+  search.value = "build a survey";
+  search.dispatchEvent(new Event("input"));
+  await settle();
+  check(
+    "a filter opens an outcome card to just what matches under it",
+    !!inPool()?.querySelector('.cap[data-id="2"]') &&
+      !inPool().querySelector('.cap[data-id="3"]'),
+  );
+  search.value = "";
+  search.dispatchEvent(new Event("input"));
+  await settle();
+
+  $("#collapseAll").click();
+  $("#expandAll").click();
+  await settle();
+  check(
+    "Expand all opens outcome cards, and what's in them",
+    !!card()?.querySelector(
+      '.cap[data-id="3"] .del[data-id="6"] .trow[data-id="10"]',
+    ),
   );
 }
 

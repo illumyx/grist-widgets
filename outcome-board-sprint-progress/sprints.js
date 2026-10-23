@@ -1,6 +1,7 @@
 /* Sprints page: the pool, then one list per sprint (start-date order until reordered by hand), each
  * holding the outcomes, capabilities, deliverables, and tasks added to that sprint, laid out like the
- * pool. Anything under an item comes with it, so it shows inside that item rather than again.
+ * pool (which starts with the outcomes). Anything under an item comes with it, so it shows inside that
+ * item rather than again.
  * Drag from the pool (or another sprint) into a sprint to add (move) an item, or within a sprint to
  * reorder it in its group; x, Delete, or dragging back to the pool takes it out; Ctrl/Cmd+V on a
  * selected sprint adds the copied item. "+ Add item" adds a new item (no parent) to a sprint. */
@@ -13,11 +14,11 @@ import {
   page,
   render,
   esc,
-  plural,
   nameOf,
   sprintLink,
   unlink,
   toast,
+  kidsOf,
   SPRINT_DONE,
   STATUSES,
   DONE,
@@ -32,28 +33,18 @@ import {
   day,
   delHTML,
   drawBoard,
-  dueHTML,
+  ocardHTML,
   paneIs,
   visible,
-  whoHTML,
   matches,
   hit,
   poolHTML,
   trowHTML,
-  shelfClass,
-  shelfHTML,
-  statusAttr,
-  typeHTML,
 } from "./view.js";
 
 ui.showAll = true; // the pool starts with every item ("Hide linked" unticked)
 let showCompleted = false;
-const X = "Remove from this sprint",
-  xButton = `<button class="x" data-unlink title="${X}" aria-label="${X}">×</button>`;
-
-const outcomeHTML = (o, sp) =>
-  `<div class="ocard${shelfClass(o)}${paneIs("O", o.id) ? " open" : ""}" data-drag tabindex="0" data-type="O" data-id="${o.id}" data-parent="${sp.id}"${statusAttr(o)}>${typeHTML("O")}${esc(o.name)}${dueHTML(o)}
-    <div class="meta"><span>${plural(o.kids.C.length, "C")}</span>${shelfHTML(o)}${whoHTML(o)}</div>${xButton}</div>`;
+const X = "Remove from this sprint";
 
 function sprintHTML(sp) {
   const k = sp.kids,
@@ -78,8 +69,7 @@ function sprintHTML(sp) {
     body =
       k.O.map((id) => S.O.get(id))
         .filter(visible)
-        .filter(matches)
-        .map((o) => outcomeHTML(o, sp))
+        .map((o) => ocardHTML(o, sp.id, X))
         .join("") +
       k.C.map((id) => capHTML(S.C.get(id), sp.id, X)).join("") +
       (dels.length
@@ -114,6 +104,11 @@ page.render = () =>
       ? poolHTML(
           "Drag notes here to take them out of a sprint",
           ` <label class="toggle"><input type="checkbox" data-hideplanned${ui.hidePlanned ? " checked" : ""}> Hide planned</label>`,
+          kidsOf("O", 0)
+            .map((id) => S.O.get(id))
+            .filter(visible)
+            .map((o) => ocardHTML(o, 0))
+            .join(""),
         ) +
           [...S.SP.values()]
             .filter((sp) => showCompleted || sp.status !== SPRINT_DONE)

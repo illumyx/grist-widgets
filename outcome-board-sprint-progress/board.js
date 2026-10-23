@@ -16,7 +16,6 @@ import {
   shelfClass,
   shelfHTML,
   statusAttr,
-  typeHTML,
   visible,
   whoHTML,
 } from "./view.js";
@@ -29,7 +28,7 @@ function laneHTML(o) {
       .map((k) => plural(o.kids[k].length, k))
       .join(" · ");
   return `<section class="lane${shelfClass(o)}">
-    <div class="lane-head${paneIs("O", o.id) ? " open" : ""}" tabindex="0" data-type="O" data-id="${o.id}" data-parent="0"${statusAttr(o)} data-drag title="Drag to reorder">${typeHTML("O")}${esc(o.name)}${dueHTML(o)}
+    <div class="lane-head${paneIs("O", o.id) ? " open" : ""}" tabindex="0" data-type="O" data-id="${o.id}" data-parent="0"${statusAttr(o)} data-drag title="Drag to reorder">${esc(o.name)}${dueHTML(o)}
       <span class="sub">${counts}${imp !== null && imp !== undefined ? ` · impact ${imp}` : ""}</span>${shelfHTML(o)}${whoHTML(o)}${pills(o)}</div>
     <div class="lane-body" data-drop="C" data-parent="${o.id}">${o.kids.C.map((c) => capHTML(S.C.get(c), o.id)).join("")}
       ${directDelsHTML(o, "Remove from this outcome")}${directTasksHTML(o, "Remove from this outcome")}

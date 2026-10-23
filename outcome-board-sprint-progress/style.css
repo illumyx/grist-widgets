@@ -6,18 +6,21 @@
   --lane: #eef1f4;
   --ink: #1f2a33;
   --muted: #5c6b78;
-  /* cards are neutral (colors are statuses): white, with a gray outcome card and guide lines */
+  /* card backgrounds alternate by level so they're told apart: outcome and deliverable white,
+     capability and task gray (colors are statuses) */
   --card: #ffffff;
+  --card-alt: #a9b1b2;
+  --muted-alt: #39444d; /* muted text on a gray card */
   --card-edge: #d5dbe0;
-  --outcome: #e2e7ec;
   --chip: #e8ecf0;
   --select: #2b6cb0;
   --danger: #c63c3c;
   /* item statuses, red (not started) to green (done) */
-  --st-not-started: #d4574e;
-  --st-progress: #e8962e;
-  --st-review: #a3b83a;
-  --st-done: #3a9d6c;
+  --st-not-started: #e38796;
+  --st-progress: #ffc07f;
+  --st-review: #ffe395;
+  --st-done: #cbeb7f;
+  --urgent: #c8102e;
   font-family: "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
   font-size: 14px;
   color: var(--ink);
@@ -107,6 +110,7 @@ input {
 }
 .lane-head {
   padding: 10px 12px 8px;
+  font-size: 15px;
   font-weight: 700;
   line-height: 1.3;
   cursor: pointer;
@@ -188,18 +192,14 @@ input {
   text-align: left;
 }
 
-/* Item cards go down in size and weight with the level: outcome (a list header, or a gray card on the
+/* Item cards go down in size and weight with the level: outcome (a list header, or a card on the
    sprints page), capability (a card with a bold title), deliverable (a smaller note), task (a row).
-   Each starts with its type mark (view.js typeHTML); what's under a card is indented along a guide
+   Their backgrounds alternate white and gray by level; what's under a card is indented along a guide
    line. */
-.ticon {
-  margin-right: 5px;
-  color: var(--muted);
-  font-weight: 400;
-}
 .cap {
   position: relative;
-  background: var(--card);
+  --muted: var(--muted-alt);
+  background: var(--card-alt);
   border-radius: 4px;
   box-shadow:
     0 1px 2px rgba(0, 0, 0, 0.15),
@@ -303,6 +303,7 @@ input {
 /* Deliverable small note */
 .del {
   position: relative;
+  --muted: #5c6b78; /* back to the usual, inside a gray capability */
   background: var(--card);
   border-radius: 2px;
   padding: 5px 24px 5px 7px;
@@ -327,15 +328,15 @@ input {
   box-shadow: 0 0 0 2px var(--select);
 }
 
-/* Urgency (view.js urgHTML): ! for Elevated, !! for High, before the name; blank = normal. In ink,
-   not color: colors are statuses. */
+/* Urgency (view.js urgHTML): ! for Elevated, !! for High, in a small round red chip before the name;
+   blank = normal. A deeper red than the statuses' pale colors. */
 .urgmark {
   display: inline-block;
-  min-width: 1.4em;
+  min-width: 1.45em;
   margin-right: 4px;
-  padding: 0 3px;
-  border-radius: 3px;
-  background: var(--ink);
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--urgent);
   color: #fff;
   font-size: 0.85em;
   font-weight: 700;
@@ -535,8 +536,8 @@ textarea.title:focus {
 }
 .urg[data-u="Elevated"],
 .urg[data-u="High"] {
-  background: var(--ink);
-  border-color: var(--ink);
+  background: var(--urgent);
+  border-color: var(--urgent);
   color: #fff;
 }
 .teff {
@@ -555,6 +556,10 @@ textarea.title:focus {
 }
 .task .name {
   flex: 1;
+  cursor: pointer; /* opens the task's side pane */
+}
+.task .name:hover {
+  text-decoration: underline;
 }
 .pane-note {
   font-size: 12px;
@@ -577,6 +582,18 @@ textarea.title:focus {
 .chip label {
   color: var(--muted);
   white-space: nowrap;
+}
+.chip [data-open] {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.chip [data-open]:hover {
+  text-decoration: underline;
 }
 .chip input {
   margin: 0 1px 0 4px;
@@ -728,6 +745,7 @@ textarea.title:focus {
   gap: 8px;
   align-items: flex-start;
   padding: 5px 26px 5px 6px;
+  font-size: 13px;
   border-radius: 3px;
   cursor: grab;
 }
@@ -904,7 +922,6 @@ textarea.title:focus {
 }
 .ocard {
   padding: 9px 26px 9px 10px;
-  background: var(--outcome);
   font-size: 15px;
   font-weight: 700;
   line-height: 1.3;
@@ -912,16 +929,30 @@ textarea.title:focus {
 .ocard .meta {
   font-weight: 400;
 }
+/* what an outcome card shows when it's open (view.js ocardHTML) */
+.ocard .obody {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 8px;
+  font-weight: 400;
+}
 .ocard.open,
 .trow.open {
   box-shadow: 0 0 0 2px var(--select);
 }
 .trow {
+  --muted: var(--muted-alt);
+  background: var(--card-alt);
   display: flex;
-  gap: 6px;
+  flex-wrap: wrap; /* when the row is narrow, what follows the name drops to a second line */
+  gap: 2px 6px;
   align-items: flex-start;
   padding: 4px 26px 4px 7px;
-  font-size: 13px;
+  font-size: 12px;
+}
+.trow .name {
+  flex: 1 1 8em;
 }
 .trow input {
   margin-top: 2px;

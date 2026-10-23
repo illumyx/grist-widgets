@@ -1,15 +1,15 @@
 # Link board (Grist custom widget)
 
-Outcomes are lists, capabilities are cards, deliverables are small notes on them,
-and clicking a deliverable opens its task checklist. Every link is many-to-many.
-Cards are neutral (white; an outcome on the sprints page is gray) and shrink in size and weight down the levels;
-each starts with a mark for its type (◎ outcome, ▣ capability, ◇ deliverable; a task has its checkbox), and what's
-under a capability is indented along a guide line. Color is kept for statuses.
+Outcomes are lists, capabilities are cards, deliverables are small notes on them, and tasks are rows
+in a deliverable (its arrow opens it; clicking it opens its side pane, with the task checklist). Every link is
+many-to-many.
+Card backgrounds alternate by level (outcome and deliverable white, capability and task gray) and cards shrink in
+size and weight down the levels; what's under a capability is indented along a guide line. The bar at a card's left
+is its status, pale red (not started) to pale green (done).
 
 - Levels can be skipped: an outcome list can also hold deliverables and tasks directly (after its
   capability cards), and a capability its own tasks (after its deliverables). Those tasks are small rows;
-  clicking one opens its parent's side pane, which lists them like a deliverable's checklist (with an
-  "Add a task" box). A child is always at a lower level than its parent; the board won't drop or paste
+  the parent's side pane lists them like a deliverable's checklist (with an "Add a task" box). A child is always at a lower level than its parent; the board won't drop or paste
   it anywhere else.
 - Drag a note to move it: between lists, between capability cards, or onto any card, note, or list that
   can hold it (dropped anywhere in an outcome list, a deliverable or task goes directly under the outcome).
@@ -25,9 +25,12 @@ under a capability is indented along a guide line. Color is kept for statuses.
 - "+ Add item" (at the bottom of an outcome list, an expanded capability, the pool, or a sprint) adds a new item
   there: pick its type with the chips (or Alt+O/C/D/T; it remembers the last one), type a name, Enter. The box
   stays open for the next one; Esc closes it, and so does clicking away (adding what was typed).
-- Clicking a task with no parent opens its own side pane (type, status, urgency, effort, assigned, sprints).
+- Clicking a task (a row on the page, or its name in a side pane's checklist; or Enter) opens its own side pane
+  (type, status, shelved, urgency, effort, assigned, when it's due, sprints). The parent chips at the top of a side
+  pane open the parent's.
 - Keys: arrows move between notes (up/down within a list or the task list, left/right across lists);
-  Space expands a capability or opens/closes a deliverable's side pane; Enter opens the side pane.
+  Space expands a capability or deliverable; Enter opens the side pane.
+- "Expand all" opens every capability, deliverable, and (on the sprints page) outcome card; "Collapse all" closes them.
 - ×N means the note appears in N places; hovering outlines the other copies.
 - Every item has a status (Not Started / In Progress / Review / Done; blank counts as Not Started), shown by the colored
   bar at the left of its card, note, row, or outcome header: red (not started), orange, yellow-green, green (done).
@@ -36,11 +39,14 @@ under a capability is indented along a guide line. Color is kept for statuses.
   "Hide shelved" (ticked to start, on both pages) hides shelved items and what's drawn under them; unticked, they show
   faded, with a Tabled or Archived tag. A shelved item isn't counted in its deliverable's tasks, its capability's
   urgency, a sprint's progress, or (in Grist) its parents' roll-ups; it isn't shown as late; and it doesn't bring
-  what's under it into its sprints. (A task in a checklist has no side pane of its own: shelve it in Grist.)
+  what's under it into its sprints.
 - Click an outcome header, capability, or deliverable to open its details in the side pane: type, status, urgency,
   impact/effort estimates, and when it's due. "~8" means the number is an estimate; plain "8" is rolled up from linked items.
-- The side pane's Type changes an item's level (e.g. a deliverable into a task). Levels it can't take are
-  greyed out: it must stay below all of its parents and above all of its children.
+- The side pane's Type changes an item's level (e.g. a deliverable into a task). Levels its children can't sit under
+  are greyed out: it must stay above all of them. A level one of its parents can't hold is marked "(moves up)":
+  choosing it moves the item up past that parent, to the nearest item above that can hold it (e.g. a task in a
+  deliverable, made a deliverable, goes onto that deliverable's capability; with nothing above, an outcome becomes a
+  list of its own and anything else goes to the pool). The link to the parent it passed, and its "optional" mark, go.
 - Each parent chip in the side pane has an "optional" box: ticked, that link is optional (the item gets
   none of that parent's impact and isn't counted in its effort; see `doc/impact-allocation.md` in the
   grist repo), and the item shows "optional" where it's drawn under that parent. Unlinking clears it.
@@ -49,10 +55,10 @@ under a capability is indented along a guide line. Color is kept for statuses.
   Items.Assignees column in Grist: add a choice there to add a person.
 - Assignment says who will act, so it rolls up: after its own initials, a card, note, or outcome header shows (faded)
   the initials of the others on anything shown under it. "Hide done" and "Hide shelved" decide what's shown.
-- Edit a name at the top of the side pane (Enter saves, Esc cancels); double-click a task to rename it.
+- Edit a name at the top of the side pane (Enter saves, Esc cancels).
 - Tasks: tick to mark done, click the small box to cycle urgency (normal / ! / !!), type an effort.
-  A blank effort reads as 0 in Grist, so 0 means "not estimated".
-- A dark ! (Elevated) or !! (High) before a name shows urgency (not a color, since colors are statuses); a capability
+  A blank effort reads as 0 in Grist, so 0 means "not estimated" (e.g. the sprint progress bars then count items).
+- A red chip with ! (Elevated) or !! (High) before a name shows urgency; a capability
   shows the highest urgency among its open deliverables and tasks.
 - The filter matches capability, deliverable, and task names; matching tasks are highlighted in the side pane.
 - The person menu next to it shows what someone is on: the items assigned to them, and the lists, cards, and notes
@@ -90,7 +96,9 @@ or through a parent, outcomes included, shelved ones left out), stacked by statu
 that's done; hover for the counts. Items are counted, not weighted by effort, since few have an effort. Click it to edit the sprint
 (name, status, dates, notes) or delete it (its items are kept). "+ Add sprint" adds one.
 
-- The pool starts with every item; "Hide planned" leaves out items already in a planned or active sprint.
+- The pool starts with every item, outcomes first; "Hide planned" leaves out items already in a planned or active sprint.
+- Outcomes are cards here. Their arrow (or Space) opens one to show what its list on the outcome board holds: its
+  capability cards, then the deliverables and tasks linked to it directly. A filter opens it to what matches under it.
 - "Hide done" starts ticked here, and notes don't show sprint pills (the list they're in says which sprint).
 - Drag from the pool into a sprint to add an item; from one sprint to another to move it; back to the pool to
   take it out. Tasks can be dragged from the side pane. Within a sprint, drag an item up or down to reorder it
