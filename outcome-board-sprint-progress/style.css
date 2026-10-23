@@ -9,8 +9,7 @@
   /* card backgrounds alternate by level so they're told apart: outcome and deliverable white,
      capability and task gray (colors are statuses) */
   --card: #ffffff;
-  --card-alt: #a9b1b2;
-  --muted-alt: #39444d; /* muted text on a gray card */
+  --card-alt: #d4d8d8;
   --card-edge: #d5dbe0;
   --chip: #e8ecf0;
   --select: #2b6cb0;
@@ -18,7 +17,7 @@
   /* item statuses, red (not started) to green (done) */
   --st-not-started: #e38796;
   --st-progress: #ffc07f;
-  --st-review: #ffe395;
+  --st-review: #ffc72c;
   --st-done: #cbeb7f;
   --urgent: #c8102e;
   font-family: "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
@@ -198,7 +197,6 @@ input {
    line. */
 .cap {
   position: relative;
-  --muted: var(--muted-alt);
   background: var(--card-alt);
   border-radius: 4px;
   box-shadow:
@@ -303,7 +301,6 @@ input {
 /* Deliverable small note */
 .del {
   position: relative;
-  --muted: #5c6b78; /* back to the usual, inside a gray capability */
   background: var(--card);
   border-radius: 2px;
   padding: 5px 24px 5px 7px;
@@ -688,13 +685,13 @@ textarea.title:focus {
   font-weight: 700;
   padding: 0 4px;
   border-radius: 8px;
-  background: #dfe5ec;
+  background: #bcc5ce; /* dark enough to show on a gray card too */
   color: var(--ink);
   align-self: center;
 }
 .who.via {
   background: none;
-  box-shadow: inset 0 0 0 1.5px #dfe5ec;
+  box-shadow: inset 0 0 0 1.5px #bcc5ce;
   color: var(--muted);
 }
 .lane-head .who {
@@ -942,7 +939,6 @@ textarea.title:focus {
   box-shadow: 0 0 0 2px var(--select);
 }
 .trow {
-  --muted: var(--muted-alt);
   background: var(--card-alt);
   display: flex;
   flex-wrap: wrap; /* when the row is narrow, what follows the name drops to a second line */
