@@ -6,19 +6,20 @@
   --lane: #eef1f4;
   --ink: #1f2a33;
   --muted: #5c6b78;
-  /* card backgrounds alternate by level so they're told apart: outcome and deliverable white,
-     capability and task gray (colors are statuses) */
-  --card: #ffffff;
-  --card-alt: #d4d8d8;
+  /* card backgrounds ramp by level so they're told apart: dark yellow (outcome) to white (task) */
+  --card-o: #e0a500;
+  --card-c: #ffc72c;
+  --card-d: #ffe395;
+  --card-t: #ffffff;
   --card-edge: #d5dbe0;
   --chip: #e8ecf0;
   --select: #2b6cb0;
   --danger: #c63c3c;
-  /* item statuses, red (not started) to green (done) */
-  --st-not-started: #e38796;
-  --st-progress: #ffc07f;
-  --st-review: #ffc72c;
-  --st-done: #cbeb7f;
+  /* item statuses, white (not started) to dark blue (done) */
+  --st-not-started: #ffffff;
+  --st-progress: #7fd6e3;
+  --st-review: #00aec7;
+  --st-done: #00587c;
   --urgent: #c8102e;
   font-family: "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
   font-size: 14px;
@@ -193,11 +194,14 @@ input {
 
 /* Item cards go down in size and weight with the level: outcome (a list header, or a card on the
    sprints page), capability (a card with a bold title), deliverable (a smaller note), task (a row).
-   Their backgrounds alternate white and gray by level; what's under a card is indented along a guide
-   line. */
+   Their backgrounds ramp from dark yellow to white by level; what's under a card is indented along a
+   guide line. */
+.lane-head[data-type="O"][data-status] {
+  background: var(--card-o);
+}
 .cap {
   position: relative;
-  background: var(--card-alt);
+  background: var(--card-c);
   border-radius: 4px;
   box-shadow:
     0 1px 2px rgba(0, 0, 0, 0.15),
@@ -301,7 +305,7 @@ input {
 /* Deliverable small note */
 .del {
   position: relative;
-  background: var(--card);
+  background: var(--card-d);
   border-radius: 2px;
   padding: 5px 24px 5px 7px;
   font-size: 13px;
@@ -685,7 +689,7 @@ textarea.title:focus {
   font-weight: 700;
   padding: 0 4px;
   border-radius: 8px;
-  background: #bcc5ce; /* dark enough to show on a gray card too */
+  background: #bcc5ce; /* shows on every card color, white to dark yellow */
   color: var(--ink);
   align-self: center;
 }
@@ -912,7 +916,7 @@ textarea.title:focus {
 .ocard,
 .trow {
   position: relative;
-  background: #fff;
+  background: var(--card-o);
   border-radius: 3px;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
   cursor: pointer;
@@ -939,7 +943,7 @@ textarea.title:focus {
   box-shadow: 0 0 0 2px var(--select);
 }
 .trow {
-  background: var(--card-alt);
+  background: var(--card-t);
   display: flex;
   flex-wrap: wrap; /* when the row is narrow, what follows the name drops to a second line */
   gap: 2px 6px;

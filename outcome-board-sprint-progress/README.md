@@ -3,9 +3,9 @@
 Outcomes are lists, capabilities are cards, deliverables are small notes on them, and tasks are rows
 in a deliverable (its arrow opens it; clicking it opens its side pane, with the task checklist). Every link is
 many-to-many.
-Card backgrounds alternate by level (outcome and deliverable white, capability and task gray) and cards shrink in
-size and weight down the levels; what's under a capability is indented along a guide line. The bar at a card's left
-is its status, pale red (not started) to pale green (done).
+Card backgrounds ramp by level (outcome dark yellow, capability yellow, deliverable light yellow, task white) and
+cards shrink in size and weight down the levels; what's under a capability is indented along a guide line. The bar
+at a card's left is its status, white (not started) to dark blue (done).
 
 - Levels can be skipped: an outcome list can also hold deliverables and tasks directly (after its
   capability cards), and a capability its own tasks (after its deliverables). Those tasks are small rows;
@@ -33,7 +33,7 @@ is its status, pale red (not started) to pale green (done).
 - "Expand all" opens every capability, deliverable, and (on the sprints page) outcome card; "Collapse all" closes them.
 - ×N means the note appears in N places; hovering outlines the other copies.
 - Every item has a status (Not Started / In Progress / Review / Done; blank counts as Not Started), shown by the colored
-  bar at the left of its card, note, row, or outcome header: red (not started), orange, yellow-green, green (done).
+  bar at the left of its card, note, row, or outcome header: white (not started), light blue, blue, dark blue (done).
   A done capability shows as "Available", and "Hide done" hides done items (and done outcome lists).
 - Any item can be shelved with the side pane's Shelved menu: Tabled (not now, maybe later) or Archived (dropped).
   "Hide shelved" (ticked to start, on both pages) hides shelved items and what's drawn under them; unticked, they show
@@ -92,8 +92,8 @@ The pool, then one list per sprint: Planned and Active (tick "Show completed" fo
 until you drag a sprint's header to reorder. Each list holds what was added to that sprint (outcomes, capabilities,
 deliverables, and tasks as small rows), laid out like the pool; whatever is under an item comes with it.
 The header shows its dates (in bold under the name), status, and a progress bar: every item in the sprint (on its own
-or through a parent, outcomes included, shelved ones left out), stacked by status in the status colors, then the share
-that's done; hover for the counts. Items are counted, not weighted by effort, since few have an effort. Click it to edit the sprint
+or through a parent, outcomes included, shelved ones left out), stacked by status in the status colors (done at the
+left, so it fills up as items are done), then the share that's done; hover for the counts. Items are counted, not weighted by effort, since few have an effort. Click it to edit the sprint
 (name, status, dates, notes) or delete it (its items are kept). "+ Add sprint" adds one.
 
 - The pool starts with every item, outcomes first; "Hide planned" leaves out items already in a planned or active sprint.

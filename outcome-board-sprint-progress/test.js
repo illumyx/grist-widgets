@@ -520,12 +520,12 @@ async function sprintsTests() {
     progress(2) === "20%",
   );
   check(
-    "... stacked by status: a blank one counts as Not Started",
+    "... stacked by status, done first: a blank one counts as Not Started",
     [
       ...$('#board .lane-head[data-id="2"] .progress .bar').children,
     ]
       .map((s) => `${s.dataset.status} ${s.style.width}`)
-      .join(", ") === "Not Started 60%, In Progress 20%, Done 20%",
+      .join(", ") === "Done 20%, In Progress 20%, Not Started 60%",
   );
   check(
     "Hide shelved starts ticked, hiding an archived capability",

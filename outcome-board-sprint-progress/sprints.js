@@ -80,17 +80,18 @@ function sprintHTML(sp) {
         .filter(matches)
         .map((t) => trowHTML(t, sp.id, X))
         .join("");
-  // a bar stacked by status, from not started to done, then the share that's done
+  // a bar stacked by status, from done to not started (so it fills from the left as items are
+  // done), then the share that's done
   const total = items.length,
     pct = Math.round((100 * counts[STATUSES.indexOf(DONE)]) / total),
-    tip = STATUSES.map((st, i) => `${st}: ${counts[i]}`).join(", "),
+    stack = STATUSES.map((st, i) => [st, counts[i]]).reverse(),
+    tip = stack.map(([st, n]) => `${st}: ${n}`).join(", "),
     progress = total
-      ? `<span class="progress" title="${tip}" aria-label="${tip}"><span class="bar">${STATUSES.map(
-          (st, i) =>
-            counts[i]
-              ? `<span data-status="${esc(st)}" style="width:${(100 * counts[i]) / total}%"></span>`
-              : "",
-        ).join("")}</span>${pct}%</span>`
+      ? `<span class="progress" title="${tip}" aria-label="${tip}"><span class="bar">${stack
+          .map(([st, n]) =>
+            n ? `<span data-status="${esc(st)}" style="width:${(100 * n) / total}%"></span>` : "",
+          )
+          .join("")}</span>${pct}%</span>`
       : "";
   return `<section class="lane sprint" style="--sp:${sp.color}">
     <div class="lane-head${paneIs("SP", sp.id) ? " open" : ""}" tabindex="0" data-type="SP" data-id="${sp.id}" data-parent="0" data-drag title="Drag to reorder">${esc(sp.name)}${dates ? `<span class="dates">${esc(dates)}</span>` : ""}
