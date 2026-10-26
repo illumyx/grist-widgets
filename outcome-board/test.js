@@ -86,6 +86,13 @@ const showFor = (label) =>
     $("#who"),
     [...$("#who").options].find((o) => o.text === label).value,
   );
+// shelve an item (or, with "", un-shelve it) from its side pane, which stays open
+async function shelve(id, value) {
+  ui.pane = { type: S.all.get(id).type, id };
+  render();
+  choose("Shelved", value);
+  await settle();
+}
 
 const results = [];
 function check(name, ok) {
@@ -514,19 +521,34 @@ async function delTasksTests() {
 async function sprintsTests() {
   const pool = (sel) => !!$(`#board .lane.unlinked ${sel}`),
     progress = (sid) =>
-      $(`#board .lane-head[data-id="${sid}"] .progress`)?.textContent;
+      $(`#board .lane-head[data-id="${sid}"] .progress`)?.textContent,
+    // a sprint's progress bar, by status: "Done 33%, Not Started 67%" (widths rounded)
+    bar = (sid) =>
+      [...$(`#board .lane-head[data-id="${sid}"] .progress .bar`).children]
+        .map(
+          (s) =>
+            `${s.dataset.status} ${Math.round(parseFloat(s.style.width))}%`,
+        )
+        .join(", ");
   check(
-    "a sprint's progress counts its items and what's under them, leaving out shelved ones (task 8 of 2, 5, 8, 9, 10 done)",
-    progress(2) === "20%",
+    "a sprint's progress counts its leaves, on their own or through a parent, leaving out shelved ones (task 8 of 8, 9, 10 done)",
+    progress(2) === "33%",
   );
   check(
     "... stacked by status, done first: a blank one counts as Not Started",
-    [
-      ...$('#board .lane-head[data-id="2"] .progress .bar').children,
-    ]
-      .map((s) => `${s.dataset.status} ${s.style.width}`)
-      .join(", ") === "Done 20%, In Progress 20%, Not Started 60%",
+    bar(2) === "Done 33%, Not Started 67%",
   );
+  // with tasks 8 and 9 archived (and 11 tabled), deliverable 5 has nothing unshelved under it
+  await shelve(8, "Archived");
+  await shelve(9, "Archived");
+  check(
+    "an item with only shelved items under it counts as a leaf (5, in progress, and 10)",
+    bar(2) === "In Progress 50%, Not Started 50%",
+  );
+  await shelve(8, "");
+  await shelve(9, "");
+  $("#pane [data-close]").click();
+  await settle();
   check(
     "Hide shelved starts ticked, hiding an archived capability",
     $("#hideShelved").checked && !pool('.cap[data-id="4"]'),
@@ -558,8 +580,8 @@ async function sprintsTests() {
   sprintLink(3, "O", 1, true);
   await settle();
   check(
-    "an outcome in a sprint counts in its progress (task 8 of 1, 2, 3, 5, 6, 8, 9, 10 done)",
-    progress(3) === "13%",
+    "an outcome in a sprint brings its leaves into its progress (task 8 of 8, 9, 10 done)",
+    progress(3) === "33%",
   );
   check(
     "an outcome card in a sprint shows the people under it",

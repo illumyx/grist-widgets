@@ -58,7 +58,9 @@ function sprintHTML(sp) {
         (x) => (x.own.has(sp.id) || x.via.has(sp.id)) && !shelvedOf(x),
       ),
     ),
-    counts = STATUSES.map((st) => items.filter((x) => statusOf(x) === st).length),
+    counts = STATUSES.map(
+      (st) => items.filter((x) => statusOf(x) === st).length,
+    ),
     dates = [sp.row[CFG.SP.start], sp.row[CFG.SP.end]]
       .filter(Boolean)
       .map(day)
@@ -89,7 +91,9 @@ function sprintHTML(sp) {
     progress = total
       ? `<span class="progress" title="${tip}" aria-label="${tip}"><span class="bar">${stack
           .map(([st, n]) =>
-            n ? `<span data-status="${esc(st)}" style="width:${(100 * n) / total}%"></span>` : "",
+            n
+              ? `<span data-status="${esc(st)}" style="width:${(100 * n) / total}%"></span>`
+              : "",
           )
           .join("")}</span>${pct}%</span>`
       : "";

@@ -57,7 +57,7 @@ at a card's left is its status, white (not started) to dark blue (done).
   the initials of the others on anything shown under it. "Hide done" and "Hide shelved" decide what's shown.
 - Edit a name at the top of the side pane (Enter saves, Esc cancels).
 - Tasks: tick to mark done, click the small box to cycle urgency (normal / ! / !!), type an effort.
-  A blank effort reads as 0 in Grist, so 0 means "not estimated" (e.g. the sprint progress bars then count items).
+  A blank effort reads as 0 in Grist, so 0 means "not estimated".
 - A red chip with ! (Elevated) or !! (High) before a name shows urgency; a capability
   shows the highest urgency among its open deliverables and tasks.
 - The filter matches capability, deliverable, and task names; matching tasks are highlighted in the side pane.
@@ -91,9 +91,10 @@ Add `?test` (index.html?test, sprints.html?test) to run the tests in `test.js` a
 The pool, then one list per sprint: Planned and Active (tick "Show completed" for the rest), in start-date order
 until you drag a sprint's header to reorder. Each list holds what was added to that sprint (outcomes, capabilities,
 deliverables, and tasks as small rows), laid out like the pool; whatever is under an item comes with it.
-The header shows its dates (in bold under the name), status, and a progress bar: every item in the sprint (on its own
-or through a parent, outcomes included, shelved ones left out), stacked by status in the status colors (done at the
-left, so it fills up as items are done), then the share that's done; hover for the counts. Items are counted, not weighted by effort, since few have an effort. Click it to edit the sprint
+The header shows its dates (in bold under the name), status, and a progress bar: the leaves in the sprint (on their
+own or through a parent: items with nothing under them, or nothing but shelved items; shelved ones left out), stacked
+by status in the status colors (done at the left, so it fills up as items are done), then the share that's done; hover
+for the counts. Items are counted, not weighted by effort, since few have an effort. Click it to edit the sprint
 (name, status, dates, notes) or delete it (its items are kept). "+ Add sprint" adds one.
 
 - The pool starts with every item, outcomes first; "Hide planned" leaves out items already in a planned or active sprint.

@@ -521,9 +521,7 @@ async function sprintsTests() {
   );
   check(
     "... stacked by status, done first: a blank one counts as Not Started",
-    [
-      ...$('#board .lane-head[data-id="2"] .progress .bar').children,
-    ]
+    [...$('#board .lane-head[data-id="2"] .progress .bar').children]
       .map((s) => `${s.dataset.status} ${s.style.width}`)
       .join(", ") === "Done 20%, In Progress 20%, Not Started 60%",
   );
