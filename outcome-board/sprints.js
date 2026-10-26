@@ -20,6 +20,9 @@ import {
   toast,
   kidsOf,
   SPRINT_DONE,
+  STATUSES,
+  DONE,
+  statusOf,
   shelvedOf,
   $,
 } from "./core.js";
@@ -32,7 +35,6 @@ import {
   drawBoard,
   ocardHTML,
   paneIs,
-  doneOf,
   visible,
   matches,
   hit,
@@ -46,20 +48,17 @@ const X = "Remove from this sprint";
 
 function sprintHTML(sp) {
   const k = sp.kids,
-    // what's in the sprint, on its own or through a parent (outcomes have no status to count), and
-    // not shelved
-    items = ["C", "D", "T"].flatMap((type) =>
+    // progress counts every item in the sprint, on its own or through a parent, that isn't shelved:
+    // parents as well as what's under them, and outcomes too (one is seldom put in a sprint, so when
+    // it is, it means something). Items are counted, not weighted by effort, since few have one; to
+    // weight them again, sum each one's Effort instead of counting it, using only the items with
+    // nothing under them (a parent's Effort is rolled up from its children's).
+    items = ["O", "C", "D", "T"].flatMap((type) =>
       [...S[type].values()].filter(
         (x) => (x.own.has(sp.id) || x.via.has(sp.id)) && !shelvedOf(x),
       ),
     ),
-    // progress: done among the items with nothing under them (a parent's effort is its children's),
-    // weighted by effort when every one has an effort (a blank one reads as 0), else counted
-    leaves = items.filter((x) => !x.children.length),
-    byEffort = leaves.every((x) => x.row[CFG.I.effort] > 0),
-    weight = (x) => (byEffort ? x.row[CFG.I.effort] : 1),
-    total = leaves.reduce((n, x) => n + weight(x), 0),
-    done = leaves.filter(doneOf).reduce((n, x) => n + weight(x), 0),
+    counts = STATUSES.map((st) => items.filter((x) => statusOf(x) === st).length),
     dates = [sp.row[CFG.SP.start], sp.row[CFG.SP.end]]
       .filter(Boolean)
       .map(day)
@@ -81,10 +80,18 @@ function sprintHTML(sp) {
         .filter(matches)
         .map((t) => trowHTML(t, sp.id, X))
         .join("");
-  const pct = Math.round((100 * done) / total),
-    num = (n) => Math.round(n * 10) / 10,
+  // a bar stacked by status, from done to not started (so it fills from the left as items are
+  // done), then the share that's done
+  const total = items.length,
+    pct = Math.round((100 * counts[STATUSES.indexOf(DONE)]) / total),
+    stack = STATUSES.map((st, i) => [st, counts[i]]).reverse(),
+    tip = stack.map(([st, n]) => `${st}: ${n}`).join(", "),
     progress = total
-      ? `<span class="progress" title="${num(done)}/${num(total)}"><span class="bar"><span style="width:${pct}%"></span></span>${pct}%</span>`
+      ? `<span class="progress" title="${tip}" aria-label="${tip}"><span class="bar">${stack
+          .map(([st, n]) =>
+            n ? `<span data-status="${esc(st)}" style="width:${(100 * n) / total}%"></span>` : "",
+          )
+          .join("")}</span>${pct}%</span>`
       : "";
   return `<section class="lane sprint" style="--sp:${sp.color}">
     <div class="lane-head${paneIs("SP", sp.id) ? " open" : ""}" tabindex="0" data-type="SP" data-id="${sp.id}" data-parent="0" data-drag title="Drag to reorder">${esc(sp.name)}${dates ? `<span class="dates">${esc(dates)}</span>` : ""}

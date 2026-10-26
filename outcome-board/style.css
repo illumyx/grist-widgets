@@ -6,14 +6,21 @@
   --lane: #eef1f4;
   --ink: #1f2a33;
   --muted: #5c6b78;
-  --cap: #ffe98a;
-  --cap-edge: #e8cf5c;
-  --del: #ffffff;
+  /* card backgrounds ramp by level so they're told apart: dark yellow (outcome) to white (task) */
+  --card-o: #e0a500;
+  --card-c: #ffc72c;
+  --card-d: #ffe395;
+  --card-t: #ffffff;
+  --card-edge: #d5dbe0;
+  --chip: #e8ecf0;
   --select: #2b6cb0;
   --danger: #c63c3c;
-  --st-none: #9aa7b4;
-  --st-progress: #e8962e;
-  --st-done: #3a9d6c;
+  /* item statuses, white (not started) to dark blue (done) */
+  --st-not-started: #ffffff;
+  --st-progress: #7fd6e3;
+  --st-review: #00aec7;
+  --st-done: #00587c;
+  --urgent: #c8102e;
   font-family: "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
   font-size: 14px;
   color: var(--ink);
@@ -185,17 +192,28 @@ input {
   text-align: left;
 }
 
-/* Capability sticky note */
+/* Item cards go down in size and weight with the level: outcome (a list header, or a card on the
+   sprints page), capability (a card with a bold title), deliverable (a smaller note), task (a row).
+   Their backgrounds ramp from dark yellow to white by level; what's under a card is indented along a
+   guide line. */
+.lane-head[data-type="O"][data-status] {
+  background: var(--card-o);
+}
 .cap {
   position: relative;
-  background: var(--cap);
-  border-bottom: 3px solid var(--cap-edge);
-  border-radius: 2px 2px 2px 14px;
+  background: var(--card-c);
+  border-radius: 4px;
   box-shadow:
-    0 1px 1px rgba(60, 50, 0, 0.18),
-    0 4px 8px -4px rgba(60, 50, 0, 0.35);
+    0 1px 2px rgba(0, 0, 0, 0.15),
+    0 3px 6px -3px rgba(0, 0, 0, 0.2);
   padding: 8px 10px 8px;
   cursor: grab;
+}
+.cap .dels,
+.cap .trows {
+  margin-left: 6px;
+  padding-left: 8px;
+  border-left: 1px solid var(--card-edge);
 }
 .cap-title {
   font-weight: 700;
@@ -287,17 +305,13 @@ input {
 /* Deliverable small note */
 .del {
   position: relative;
-  background: var(--del);
-  border-left: 4px solid var(--st-none);
+  background: var(--card-d);
   border-radius: 2px;
   padding: 5px 24px 5px 7px;
   font-size: 13px;
   line-height: 1.3;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
   cursor: pointer;
-}
-.del[data-status="In Progress"] {
-  border-left-color: var(--st-progress);
 }
 .del[data-status="Done"] {
   border-left-color: var(--st-done);
@@ -315,31 +329,43 @@ input {
   box-shadow: 0 0 0 2px var(--select);
 }
 
-/* Urgency banners (blank = normal) */
-.cap[data-urgency]::before,
-.del[data-urgency]::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 5px;
-  border-radius: 2px 2px 0 0;
+/* Urgency (view.js urgHTML): ! for Elevated, !! for High, in a small round red chip before the name;
+   blank = normal. A deeper red than the statuses' pale colors. */
+.urgmark {
+  display: inline-block;
+  min-width: 1.45em;
+  margin-right: 4px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--urgent);
+  color: #fff;
+  font-size: 0.85em;
+  font-weight: 700;
+  line-height: 1.35;
+  text-align: center;
+  vertical-align: 1px;
 }
-.del[data-urgency]::before {
-  left: -4px;
+/* Status bar at the left of an item's card, note, or row, and of an outcome list's header (core.js
+   statusOf: blank counts as Not Started); a sprint's progress bar stacks the same colors */
+[data-status="Not Started"] {
+  --st: var(--st-not-started);
 }
-.cap[data-urgency] {
-  padding-top: 12px;
+[data-status="In Progress"] {
+  --st: var(--st-progress);
 }
-.del[data-urgency] {
-  padding-top: 9px;
+[data-status="Review"] {
+  --st: var(--st-review);
 }
-[data-urgency="Elevated"]::before {
-  background: #f2c418;
+[data-status="Done"] {
+  --st: var(--st-done);
 }
-[data-urgency="High"]::before {
-  background: #d64545;
+.lane-head[data-status],
+.ocard[data-status],
+.cap[data-status],
+.del[data-status],
+.trow[data-status],
+.task[data-status] {
+  border-left: 4px solid var(--st);
 }
 .cap.open,
 .lane-head.open {
@@ -495,23 +521,25 @@ textarea.title:focus {
   color: var(--ink);
   font-size: 13px;
 }
+/* a checklist task's urgency button: empty (normal), ! or !! (click to cycle) */
 .urg {
-  flex: 0 0 14px;
-  height: 14px;
-  margin-top: 2px;
+  flex: 0 0 22px;
+  height: 16px;
+  margin-top: 1px;
   border: 1px solid #aab5bf;
-  border-radius: 2px;
+  border-radius: 3px;
   background: #fff;
   cursor: pointer;
   padding: 0;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
 }
-.urg[data-u="Elevated"] {
-  background: #f2c418;
-  border-color: #d9ae10;
-}
+.urg[data-u="Elevated"],
 .urg[data-u="High"] {
-  background: #d64545;
-  border-color: #b83434;
+  background: var(--urgent);
+  border-color: var(--urgent);
+  color: #fff;
 }
 .teff {
   width: 58px;
@@ -548,7 +576,7 @@ textarea.title:focus {
 }
 .chip {
   font-size: 11px;
-  background: var(--cap);
+  background: var(--chip);
   padding: 1px 6px;
   border-radius: 3px;
 }
@@ -607,15 +635,15 @@ textarea.title:focus {
 }
 .progress .bar {
   flex: 1;
+  display: flex;
   height: 6px;
   border-radius: 3px;
   background: rgba(0, 0, 0, 0.08);
   overflow: hidden;
 }
 .progress .bar span {
-  display: block;
   height: 100%;
-  background: var(--sp);
+  background: var(--st);
 }
 .lane-head .sp {
   margin: 4px 4px 0 0;
@@ -661,13 +689,13 @@ textarea.title:focus {
   font-weight: 700;
   padding: 0 4px;
   border-radius: 8px;
-  background: #dfe5ec;
+  background: #bcc5ce; /* shows on every card color, white to dark yellow */
   color: var(--ink);
   align-self: center;
 }
 .who.via {
   background: none;
-  box-shadow: inset 0 0 0 1.5px #dfe5ec;
+  box-shadow: inset 0 0 0 1.5px #bcc5ce;
   color: var(--muted);
 }
 .lane-head .who {
@@ -888,14 +916,14 @@ textarea.title:focus {
 .ocard,
 .trow {
   position: relative;
-  background: #fff;
+  background: var(--card-o);
   border-radius: 3px;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
   cursor: pointer;
 }
 .ocard {
-  padding: 8px 26px 8px 10px;
-  border-left: 4px solid var(--select);
+  padding: 9px 26px 9px 10px;
+  font-size: 15px;
   font-weight: 700;
   line-height: 1.3;
 }
@@ -915,6 +943,7 @@ textarea.title:focus {
   box-shadow: 0 0 0 2px var(--select);
 }
 .trow {
+  background: var(--card-t);
   display: flex;
   flex-wrap: wrap; /* when the row is narrow, what follows the name drops to a second line */
   gap: 2px 6px;

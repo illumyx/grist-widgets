@@ -1,8 +1,11 @@
 # Link board (Grist custom widget)
 
-Outcomes are lists, capabilities are sticky notes, deliverables are small notes on them, and tasks are rows
+Outcomes are lists, capabilities are cards, deliverables are small notes on them, and tasks are rows
 in a deliverable (its arrow opens it; clicking it opens its side pane, with the task checklist). Every link is
 many-to-many.
+Card backgrounds ramp by level (outcome dark yellow, capability yellow, deliverable light yellow, task white) and
+cards shrink in size and weight down the levels; what's under a capability is indented along a guide line. The bar
+at a card's left is its status, white (not started) to dark blue (done).
 
 - Levels can be skipped: an outcome list can also hold deliverables and tasks directly (after its
   capability cards), and a capability its own tasks (after its deliverables). Those tasks are small rows;
@@ -29,7 +32,9 @@ many-to-many.
   Space expands a capability or deliverable; Enter opens the side pane.
 - "Expand all" opens every capability, deliverable, and (on the sprints page) outcome card; "Collapse all" closes them.
 - ×N means the note appears in N places; hovering outlines the other copies.
-- Capabilities have a status (Not Started / In Progress / Review / Done); a done one shows as "Available", and "Hide done" hides it (and done outcome lists).
+- Every item has a status (Not Started / In Progress / Review / Done; blank counts as Not Started), shown by the colored
+  bar at the left of its card, note, row, or outcome header: white (not started), light blue, blue, dark blue (done).
+  A done capability shows as "Available", and "Hide done" hides done items (and done outcome lists).
 - Any item can be shelved with the side pane's Shelved menu: Tabled (not now, maybe later) or Archived (dropped).
   "Hide shelved" (ticked to start, on both pages) hides shelved items and what's drawn under them; unticked, they show
   faded, with a Tabled or Archived tag. A shelved item isn't counted in its deliverable's tasks, its capability's
@@ -51,9 +56,10 @@ many-to-many.
 - Assignment says who will act, so it rolls up: after its own initials, a card, note, or outcome header shows (faded)
   the initials of the others on anything shown under it. "Hide done" and "Hide shelved" decide what's shown.
 - Edit a name at the top of the side pane (Enter saves, Esc cancels).
-- Tasks: tick to mark done, click the small square to cycle urgency (normal / yellow / red), type an effort.
+- Tasks: tick to mark done, click the small box to cycle urgency (normal / ! / !!), type an effort.
   A blank effort reads as 0 in Grist, so 0 means "not estimated" (e.g. the sprint progress bars then count items).
-- Yellow/red banners show Elevated/High urgency; a capability shows the highest urgency among its open deliverables.
+- A red chip with ! (Elevated) or !! (High) before a name shows urgency; a capability
+  shows the highest urgency among its open deliverables and tasks.
 - The filter matches capability, deliverable, and task names; matching tasks are highlighted in the side pane.
 - The person menu next to it shows what someone is on: the items assigned to them, and the lists, cards, and notes
   they sit in (a card shown only for what's under it opens to show it). "Unassigned" shows the items nobody is on or
@@ -85,7 +91,9 @@ Add `?test` (index.html?test, sprints.html?test) to run the tests in `test.js` a
 The pool, then one list per sprint: Planned and Active (tick "Show completed" for the rest), in start-date order
 until you drag a sprint's header to reorder. Each list holds what was added to that sprint (outcomes, capabilities,
 deliverables, and tasks as small rows), laid out like the pool; whatever is under an item comes with it.
-The header shows its dates (in bold under the name), status, and a progress bar (share of effort done among items with nothing under them, or of the items if any has no effort, leaving out shelved ones; hover for the numbers). Click it to edit the sprint
+The header shows its dates (in bold under the name), status, and a progress bar: every item in the sprint (on its own
+or through a parent, outcomes included, shelved ones left out), stacked by status in the status colors (done at the
+left, so it fills up as items are done), then the share that's done; hover for the counts. Items are counted, not weighted by effort, since few have an effort. Click it to edit the sprint
 (name, status, dates, notes) or delete it (its items are kept). "+ Add sprint" adds one.
 
 - The pool starts with every item, outcomes first; "Hide planned" leaves out items already in a planned or active sprint.

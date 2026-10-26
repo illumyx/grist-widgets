@@ -30,6 +30,7 @@ import {
   nameOf,
   render,
   NOT_STARTED,
+  statusOf,
   TYPES,
   isOptional,
   setOptional,
@@ -193,7 +194,14 @@ const assignMenu = (t) =>
 const optHTML = (parent, id) =>
   isOptional(parent, id) ? `<span class="pill">optional</span>` : "";
 const urgRank = (u) => URGENCY.indexOf(u || "");
-const urgAttr = (u) => (u ? ` data-urgency="${esc(u)}"` : "");
+// urgency shows as ! (Elevated) or !! (High) in a red chip before the name
+const URG_MARK = { Elevated: "!", High: "!!" };
+const urgHTML = (u, title = `Urgency: ${u}`) =>
+  URG_MARK[u]
+    ? `<span class="urgmark" data-u="${esc(u)}" title="${esc(title)}" aria-label="${esc(title)}">${URG_MARK[u]}</span>`
+    : "";
+// colors the bar at the left of an item's card, note, row, or outcome header by its status
+export const statusAttr = (x) => ` data-status="${esc(statusOf(x))}"`;
 export const paneIs = (type, id) => ui.pane?.type === type && ui.pane.id === id;
 
 const TRASH = `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2.5 4h11M6 4V2.5h4V4M4 4l.7 9.5h6.6L12 4M6.8 6.5v5M9.2 6.5v5"/></svg>`;
@@ -316,8 +324,8 @@ export function delHTML(d, cap, xTitle = "Remove from this capability") {
   const st = d.row[CFG.I.status] || "";
   const filtering = (q() && !matches(d)) || (who() && !whoSelf(d)),
     open = ui.expanded.has(ekey(cap, d.id)) || !!filtering;
-  return `<div class="del${shelfClass(d)}${paneIs("D", d.id) ? " open" : ""}" data-drag tabindex="0" data-type="D" data-id="${d.id}" data-parent="${cap}" data-status="${esc(st)}"${urgAttr(d.row[CFG.I.urgency])}>
-    <button class="chev" data-toggle aria-expanded="${open}" aria-label="${open ? "Collapse" : "Expand"}">${open ? "▾" : "▸"}</button>${esc(d.name)}${copies(d)}${dueHTML(d)}
+  return `<div class="del${shelfClass(d)}${paneIs("D", d.id) ? " open" : ""}" data-drag tabindex="0" data-type="D" data-id="${d.id}" data-parent="${cap}"${statusAttr(d)}>
+    <button class="chev" data-toggle aria-expanded="${open}" aria-label="${open ? "Collapse" : "Expand"}">${open ? "▾" : "▸"}</button>${urgHTML(d.row[CFG.I.urgency])}${esc(d.name)}${copies(d)}${dueHTML(d)}
     <div class="meta">${tasks.length ? `<span>${done}/${tasks.length} tasks</span>` : ""}${st ? `<span>${esc(st)}</span>` : ""}${shelfHTML(d)}${optHTML(cap, d.id)}${whoHTML(d)}${pills(d)}</div>${metrics(d)}
     ${
       open
@@ -331,8 +339,8 @@ export function delHTML(d, cap, xTitle = "Remove from this capability") {
 // A task shown on its own (directly under a card or list, or in a sprint): a small row. Clicking it
 // opens its side pane.
 export const trowHTML = (t, parent, xTitle) =>
-  `<div class="trow${doneOf(t) ? " done" : ""}${shelfClass(t)}${paneIs("T", t.id) ? " open" : ""}" data-drag tabindex="0" data-type="T" data-id="${t.id}" data-parent="${parent}">
-    <input type="checkbox" data-check${doneOf(t) ? " checked" : ""} aria-label="Done"><span class="name">${esc(t.name)}</span>${dueHTML(t)}${shelfHTML(t)}${optHTML(parent, t.id)}${whoHTML(t)}${xTitle ? `<button class="x" data-unlink title="${xTitle}" aria-label="${xTitle}">×</button>` : ""}</div>`;
+  `<div class="trow${doneOf(t) ? " done" : ""}${shelfClass(t)}${paneIs("T", t.id) ? " open" : ""}" data-drag tabindex="0" data-type="T" data-id="${t.id}" data-parent="${parent}"${statusAttr(t)}>
+    <input type="checkbox" data-check${doneOf(t) ? " checked" : ""} aria-label="Done"><span class="name">${urgHTML(t.row[CFG.I.urgency])}${esc(t.name)}</span>${dueHTML(t)}${shelfHTML(t)}${optHTML(parent, t.id)}${whoHTML(t)}${xTitle ? `<button class="x" data-unlink title="${xTitle}" aria-label="${xTitle}">×</button>` : ""}</div>`;
 
 // A card's or outcome list's own deliverables and tasks (linked directly, skipping a level)
 export function directDelsHTML(p, xTitle) {
@@ -367,8 +375,8 @@ export function capHTML(c, out, xTitle = "Remove from this outcome") {
     .filter((d) => !doneOf(d) && !shelvedOf(d))
     .map((d) => d.row[CFG.I.urgency])
     .sort((x, y) => urgRank(y) - urgRank(x))[0];
-  return `<div class="cap${shelfClass(c)}${paneIs("C", c.id) ? " open" : ""}" data-drag tabindex="0" data-type="C" data-id="${c.id}" data-parent="${out}"${urgAttr(urg)}>
-    <div class="cap-title"><button class="chev" data-toggle aria-expanded="${open}" aria-label="${open ? "Collapse" : "Expand"}">${open ? "▾" : "▸"}</button>${esc(c.name)}</div>${dueHTML(c)}
+  return `<div class="cap${shelfClass(c)}${paneIs("C", c.id) ? " open" : ""}" data-drag tabindex="0" data-type="C" data-id="${c.id}" data-parent="${out}"${statusAttr(c)}>
+    <div class="cap-title"><button class="chev" data-toggle aria-expanded="${open}" aria-label="${open ? "Collapse" : "Expand"}">${open ? "▾" : "▸"}</button>${urgHTML(urg, `Most urgent under it: ${urg}`)}${esc(c.name)}</div>${dueHTML(c)}
     ${copies(c)}
     <div class="meta"><span>${plural(dels.length, "D")}</span>${ownT.length ? `<span>${plural(ownT.length, "T")}</span>` : ""}${shelfHTML(c)}${optHTML(out, c.id)}
 
@@ -399,7 +407,7 @@ export function ocardHTML(o, parent, xTitle) {
         directTasksHTML(o, X, !!filtering)
       : "";
   if (filtering && !body) return ""; // only here for what's under it, and none of that is shown
-  return `<div class="ocard${shelfClass(o)}${paneIs("O", o.id) ? " open" : ""}" data-drag tabindex="0" data-type="O" data-id="${o.id}" data-parent="${parent}">
+  return `<div class="ocard${shelfClass(o)}${paneIs("O", o.id) ? " open" : ""}" data-drag tabindex="0" data-type="O" data-id="${o.id}" data-parent="${parent}"${statusAttr(o)}>
     <button class="chev" data-toggle aria-expanded="${open}" aria-label="${open ? "Collapse" : "Expand"}">${open ? "▾" : "▸"}</button>${esc(o.name)}${dueHTML(o)}
     <div class="meta"><span>${plural(o.kids.C.length, "C")}</span>${shelfHTML(o)}${whoHTML(o)}</div>
     ${open ? `<div class="obody">${body}${addItemHTML(`oc${ekey(parent, o.id)}`, ["C", "D", "T"], o.id)}</div>` : ""}
@@ -496,10 +504,10 @@ function renderPane() {
             const u = t.row[CFG.I.urgency] || "";
             if (confirming("T", t.id))
               return `<div class="task" data-type="T" data-id="${t.id}" data-parent="${x.id}">${confirmHTML(ui.confirm)}</div>`;
-            return `<div class="task${doneOf(t) ? " done" : ""}${shelfClass(t)}${(q() || who()) && matches(t) && (!who() || whoSelf(t)) ? " hit" : ""}" data-drag tabindex="0" data-type="T" data-id="${t.id}" data-parent="${x.id}">
-        <input type="checkbox" data-check ${doneOf(t) ? "checked" : ""} aria-label="Done">
+            return `<div class="task${doneOf(t) ? " done" : ""}${shelfClass(t)}${(q() || who()) && matches(t) && (!who() || whoSelf(t)) ? " hit" : ""}" data-drag tabindex="0" data-type="T" data-id="${t.id}" data-parent="${x.id}"${statusAttr(t)}>
+        <input type="checkbox" data-check${doneOf(t) ? " checked" : ""} aria-label="Done">
         <span class="name" title="Open this task">${esc(t.name)}</span>${shelfHTML(t)}${optHTML(x.id, t.id)}${whoHTML(t)}
-        <button class="urg" data-urg data-u="${esc(u)}" title="Urgency: ${esc(u || "Normal")} (click to change)" aria-label="Urgency: ${esc(u || "Normal")}"></button>
+        <button class="urg" data-urg data-u="${esc(u)}" title="Urgency: ${esc(u || "Normal")} (click to change)" aria-label="Urgency: ${esc(u || "Normal")}">${URG_MARK[u] || ""}</button>
         <input class="teff" type="number" step="any" data-teffort value="${esc(num(t.row[CFG.I.effortEstimate]) ?? "")}" placeholder="effort" aria-label="Effort">
         <span class="tsprints">${dueHTML(t)}${assignMenu(t)}${S.hasSprints ? sprintMenu("T", t) + pills(t, true) : ""}</span>
         <button class="trash" data-delete title="Delete task" aria-label="Delete task">${TRASH}</button>

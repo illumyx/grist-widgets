@@ -57,6 +57,7 @@
         Type: "Deliverable",
         Item: "Error alerts to Slack",
         Status: "Not Started",
+        Urgency: "High",
         Target_Date: 1789948800, // overdue (Sep 21, 2026)
         Children: [],
       },
@@ -72,6 +73,7 @@
         Type: "Task",
         Item: "Build page",
         Status: "Not Started",
+        Urgency: "Elevated",
         Target_Note: "Before the pilot",
       },
       { id: 10, Type: "Task", Item: "Draft copy", Status: "Not Started" },

@@ -60,7 +60,9 @@ export const shelvedOf = (x) => !!x.row[CFG.I.shelved];
 export const tableOf = (type) => (type === "SP" ? CFG.SP : CFG.I).table;
 // Items have Impact/Effort (shown), *_Rollup (formula) and *_Estimate (entered).
 // Editable fields in the side pane, per level: [column, label, kind]
-const STATUSES = ["Not Started", "In Progress", "Review", "Done"]; // a done capability shows as "Available"
+// in order from not started to done (the status colors and sprint progress bars go the same way); a
+// done capability shows as "Available"
+export const STATUSES = ["Not Started", "In Progress", "Review", "Done"];
 const SPRINT_STATUSES = ["Planned", "Active", "Completed"];
 // kind: "number", "urgency", "shelved", "date", "text", or a list of choices
 export const FIELDS = {
@@ -134,6 +136,9 @@ export const plural = (n, type) =>
   `${n} ${n === 1 ? LABEL[type] : PLURAL[type]}`;
 export const DONE = "Done",
   NOT_STARTED = "Not Started";
+// an item's status, one of STATUSES: a blank one (or one that isn't in the list) counts as Not Started
+export const statusOf = (x) =>
+  STATUSES.includes(x.row[CFG.I.status]) ? x.row[CFG.I.status] : NOT_STARTED;
 
 const api = window.GRIST_MOCK || grist;
 export const $ = (s, el = document) => el.querySelector(s);

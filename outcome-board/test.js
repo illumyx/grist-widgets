@@ -516,8 +516,16 @@ async function sprintsTests() {
     progress = (sid) =>
       $(`#board .lane-head[data-id="${sid}"] .progress`)?.textContent;
   check(
-    "a sprint's progress leaves out shelved items (1 of tasks 8, 9, 10 done)",
-    progress(2) === "33%",
+    "a sprint's progress counts its items and what's under them, leaving out shelved ones (task 8 of 2, 5, 8, 9, 10 done)",
+    progress(2) === "20%",
+  );
+  check(
+    "... stacked by status, done first: a blank one counts as Not Started",
+    [
+      ...$('#board .lane-head[data-id="2"] .progress .bar').children,
+    ]
+      .map((s) => `${s.dataset.status} ${s.style.width}`)
+      .join(", ") === "Done 20%, In Progress 20%, Not Started 60%",
   );
   check(
     "Hide shelved starts ticked, hiding an archived capability",
@@ -549,6 +557,10 @@ async function sprintsTests() {
   // an outcome in a sprint shows the people on what's under it (task 8, DR's, is done: hidden here)
   sprintLink(3, "O", 1, true);
   await settle();
+  check(
+    "an outcome in a sprint counts in its progress (task 8 of 1, 2, 3, 5, 6, 8, 9, 10 done)",
+    progress(3) === "13%",
+  );
   check(
     "an outcome card in a sprint shows the people under it",
     who($('#board .lane.sprint .ocard[data-id="1"]')) === "~MK",
