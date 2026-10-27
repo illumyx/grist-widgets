@@ -4,7 +4,9 @@
  * item rather than again.
  * Drag from the pool (or another sprint) into a sprint to add (move) an item, or within a sprint to
  * reorder it in its group; x, Delete, or dragging back to the pool takes it out; Ctrl/Cmd+V on a
- * selected sprint adds the copied item. "+ Add item" adds a new item (no parent) to a sprint. */
+ * selected sprint adds the copied item. Cards link the way they do on the outcome board: dropping or
+ * pasting onto one links the item under it, and x, Delete, or dragging to the pool unlinks what's
+ * in one. "+ Add item" adds a new item (no parent) to a sprint. */
 
 import {
   start,
@@ -14,10 +16,10 @@ import {
   page,
   render,
   esc,
-  nameOf,
   sprintLink,
+  sprintAction,
   unlink,
-  toast,
+  canParent,
   kidsOf,
   SPRINT_DONE,
   STATUSES,
@@ -131,7 +133,11 @@ const sprintOf = (el) => {
   const lane = el?.closest(".lane.sprint");
   return lane ? +$(".lane-head", lane).dataset.id : 0;
 };
-const directlyIn = (sid, type, id) => !!S.SP.get(sid)?.kids[type].includes(id);
+// a note drawn inside a card on the page (its data-parent is that card's item), not at the top of a
+// sprint (its data-parent is the sprint) or the pool
+const nested = (el) => !!el.parentElement.closest("#board [data-type]");
+// a note at the top of a sprint: an item directly in that sprint
+const atTop = (el) => !!sprintOf(el) && !nested(el);
 
 // a sprint list's notes of one level, in order (its own items, not ones inside a capability)
 const GROUP = {
@@ -162,32 +168,56 @@ page.dropTarget = (e) => {
     ref: before || last.nextSibling,
   };
 };
+// A drop in a sprint or the pool (a card that can hold the note takes it instead: see page.lift).
+// Into a sprint adds the item to it, its links unchanged (from the top of another sprint, it moves).
+// Into the pool takes it out of the sprint whose top it was at, or else unlinks it from the card (or
+// side pane) it was in, as on the outcome board.
 page.drop = (d, t) => {
   const from = sprintOf(d.el),
-    direct = directlyIn(from, d.type, d.id);
-  if (t.sprint === from) {
-    // reorder within the sprint (inherited items have no place of their own to move)
-    if (direct) sprintLink(from, d.type, d.id, true, { before: t.before });
+    top = atTop(d.el);
+  if (t.sprint && t.sprint === from) {
+    // reorder within the sprint (what's in it through a parent has no place of its own to move)
+    if (top) sprintLink(from, d.type, d.id, true, { before: t.before });
   } else if (t.sprint)
     sprintLink(t.sprint, d.type, d.id, true, {
-      from: direct ? from : undefined,
+      from: top ? from : undefined,
       before: t.before,
     });
-  else if (direct) sprintLink(from, d.type, d.id, false); // back to the pool
+  else if (top) sprintLink(from, d.type, d.id, false);
+  else unlink(d.type, d.id, d.parent); // (nothing to do from the top of the pool)
 };
-page.unlink = (s, note) => {
-  const sid = sprintOf(note);
-  if (!sid) return unlink(s.type, s.id, s.parent); // e.g. a task in the side pane
-  if (directlyIn(sid, s.type, s.id))
-    return sprintLink(sid, s.type, s.id, false);
-  toast(
-    `“${nameOf(s.id)}” is in “${S.SP.get(sid).name}” through a parent; take that out instead.`,
-  );
+// A drop on a card links the note under it, as on the outcome board. From the top of a sprint it's
+// a new link (it was under no item there), and if the card is in that same sprint, it leaves the top
+// (it's in the sprint through the card now); its other sprints don't change.
+page.lift = (d, to) => {
+  if (!atTop(d.el)) return [d.parent, []];
+  const sid = sprintOf(d.el),
+    card = S.all.get(to);
+  return [
+    0,
+    card.own.has(sid) || card.via.has(sid)
+      ? [sprintAction(sid, d.id, false)]
+      : [],
+  ];
 };
+// x or Delete: in a card (or the side pane), unlinks it from that card, as on the outcome board; at
+// the top of a sprint, takes it out of the sprint
+page.unlink = (s, note) =>
+  atTop(note)
+    ? sprintLink(sprintOf(note), s.type, s.id, false)
+    : unlink(s.type, s.id, s.parent);
+// Ctrl/Cmd+V: a selected card that can hold the copied item (or a note of its level inside a card)
+// links it there, as on the outcome board; anything else selected in a sprint adds it to the sprint.
 page.paste = (clip, el) => {
   const sid = sprintOf(el);
-  if (sid) sprintLink(sid, clip.type, clip.id, true);
-  return !!sid;
+  if (
+    !sid ||
+    canParent(el.dataset.type, clip.type) ||
+    (nested(el) && el.dataset.type === clip.type)
+  )
+    return false;
+  sprintLink(sid, clip.type, clip.id, true);
+  return true;
 };
 
 $("#showCompleted").addEventListener("change", (e) => {

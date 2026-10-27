@@ -1046,22 +1046,24 @@ function over(x, y) {
     $("#board").insertBefore(marker, slot.before || $("#board .add-lane"));
     return slot;
   }
-  if (page.dropTarget && !e.target.closest("#pane")) {
-    // this page decides where items can land on the board (the sprints page); the side pane
-    // always works as usual (reorder tasks, move them between deliverables)
-    const t = landing(e, page.dropTarget);
-    if (t) {
-      t.el.classList.add("drop-into");
-      if (t.zone) {
+  // A page can decide where items land on the board (the sprints page: in a sprint, or the pool),
+  // except on a card or note that can hold them, which takes them as on the outcome board. The side
+  // pane always works as usual (reorder tasks, move them between deliverables).
+  const paged = page.dropTarget && !e.target.closest("#pane"),
+    t = landing(e, dropTarget, paged ? null : laneTarget);
+  if (paged && !t?.parent) {
+    const p = landing(e, page.dropTarget);
+    if (p) {
+      p.el.classList.add("drop-into");
+      if (p.zone) {
         // where in the list it will land
         marker = document.createElement("div");
         marker.className = "drop-marker";
-        t.zone.insertBefore(marker, t.ref);
+        p.zone.insertBefore(marker, p.ref);
       }
     }
-    return t && { ...t, page: true };
+    return p && { ...p, page: true };
   }
-  const t = landing(e, dropTarget, laneTarget);
   if (!t) return null;
   if (t.into) {
     t.into.classList.add("drop-into");
@@ -1115,7 +1117,8 @@ function drop(x, y) {
     index = beforeId ? full.indexOf(beforeId) : full.length;
     if (index < 0) index = full.length;
   }
-  move(d.type, d.id, d.parent, t.parent, index, beforeId);
+  const [from, extra] = page.lift?.(d, t.parent) ?? [d.parent, []];
+  move(d.type, d.id, from, t.parent, index, beforeId, extra);
 }
 
 const START = 6; // px the pointer moves, button held, before pressing a note becomes dragging it

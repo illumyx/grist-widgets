@@ -385,8 +385,9 @@ function rowOrder(type, id, beforeId) {
   return rowOrderAction(type, all);
 }
 
-export function move(type, id, from, to, index, beforeId) {
-  const acts = [];
+// extra: more actions to apply with the move, as one change (e.g. taking it out of a sprint)
+export function move(type, id, from, to, index, beforeId, extra = []) {
+  const acts = [...extra];
   if (!to) acts.push(rowOrder(type, id, beforeId));
   if (from === to) {
     if (!to) return act(acts);
@@ -580,27 +581,32 @@ export function below(type, id) {
   return gone;
 }
 
+// The action that adds an item to a sprint (before the item before, if given, else at the end), or
+// takes it out.
+export function sprintAction(sid, id, add, before) {
+  const list = S.SP.get(sid).items.filter((x) => x !== id),
+    at = list.indexOf(before);
+  if (add) at < 0 ? list.push(id) : list.splice(at, 0, id);
+  return [
+    "UpdateRecord",
+    CFG.SP.table,
+    sid,
+    { [CFG.SP.items]: ["L", ...list] },
+  ];
+}
+
 // Add an item to a sprint, or take it out (explicit membership only).
 // Options: from (a sprint id): also take the item out of that sprint (a move); before (an item id):
 // place it before that item in its group instead of at the end (adding an item that's already in the
 // sprint just moves it there).
 export function sprintLink(sid, type, id, add, { from, before } = {}) {
-  const update = (sid, add) => {
-    const list = S.SP.get(sid).items.filter((x) => x !== id),
-      at = list.indexOf(before);
-    if (add) at < 0 ? list.push(id) : list.splice(at, 0, id);
-    return [
-      "UpdateRecord",
-      CFG.SP.table,
-      sid,
-      { [CFG.SP.items]: ["L", ...list] },
-    ];
-  };
   const name = nameOf(id),
     to = S.SP.get(sid).name,
     within = add && S.SP.get(sid).kids[type].includes(id);
   act(
-    from ? [update(from, false), update(sid, true)] : [update(sid, add)],
+    from
+      ? [sprintAction(from, id, false), sprintAction(sid, id, true, before)]
+      : [sprintAction(sid, id, add, before)],
     from
       ? `Moved “${name}” to “${to}”.`
       : within
@@ -631,8 +637,11 @@ export function toast(msg) {
 // drops, unlinking (x / Delete), and pasting: see the sprints page.
 export const page = {
   render() {},
-  dropTarget: null, // (event) -> where a drag would land, or null
+  dropTarget: null, // (event) -> where a drag would land if no card can hold it, or null
   drop: null, // (drag, target)
+  // (drag, to) -> [from, extra actions]: for a drop on a card (to), where the dragged note was as
+  // move() sees it (the item it's drawn under, 0: none), and anything else the move changes
+  lift: null,
   unlink: null, // (sel, note element)
   paste: null, // (clip, selected element) -> true if handled
 };

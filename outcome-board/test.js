@@ -86,6 +86,11 @@ const showFor = (label) =>
     $("#who"),
     [...$("#who").options].find((o) => o.text === label).value,
   );
+// Ctrl+key on the selected note (Ctrl+C copies it, Ctrl+V pastes)
+const pressCtrl = (key) =>
+  $("#board .selected").dispatchEvent(
+    new KeyboardEvent("keydown", { key, ctrlKey: true, bubbles: true }),
+  );
 // shelve an item (or, with "", un-shelve it) from its side pane, which stays open
 async function shelve(id, value) {
   ui.pane = { type: S.all.get(id).type, id };
@@ -646,6 +651,90 @@ async function sprintsTests() {
     !!card()?.querySelector(
       '.cap[data-id="3"] .del[data-id="6"] .trow[data-id="10"]',
     ),
+  );
+
+  // Cards link the way they do on the outcome board. Sprint 2 holds capability 2 and outcome 1;
+  // Sprint 3, deliverable 6 and outcome 1. Deliverable 7 is in no sprint and under nothing.
+  const inLane = (sid, sel) =>
+      // the first note matching sel in sprint sid's list
+      $(
+        `#board .lane-head[data-type="SP"][data-id="${sid}"]`,
+      ).parentElement.querySelector(sel),
+    // open a card with its arrow
+    expand = async (el) => {
+      el.querySelector("[data-toggle]").click();
+      await settle();
+    };
+  $("#collapseAll").click(); // (so the pool fits on the page)
+  await settle();
+  dragTo(
+    $('#board .lane.unlinked .del[data-id="7"]'),
+    inLane(2, '.cap[data-id="2"]'),
+  );
+  await settle();
+  check(
+    "dropping a note onto a card in a sprint links it there (so it's in the sprint through the card)",
+    S.C.get(2).kids.D.includes(7) &&
+      S.D.get(7).via.has(2) &&
+      !S.SP.get(2).items.includes(7),
+  );
+  await expand($('#board .lane.unlinked .cap[data-id="2"]'));
+  dragTo(
+    $('#board .lane.unlinked .cap[data-id="2"] .del[data-id="7"]'),
+    inLane(3, ".lane-head"),
+  );
+  await settle();
+  check(
+    "dragged out of a card into a sprint, it's added to the sprint and keeps its link",
+    S.SP.get(3).items.includes(7) && S.C.get(2).kids.D.includes(7),
+  );
+  await expand(inLane(2, '.cap[data-id="2"]'));
+  inLane(2, '.cap[data-id="2"] .del[data-id="7"] > .x').click();
+  await settle();
+  check(
+    "x on a note in a card unlinks it from the card, as on the outcome board",
+    !S.C.get(2).kids.D.includes(7) && S.SP.get(3).items.includes(7),
+  );
+  dragTo(inLane(3, '.del[data-id="6"]'), inLane(3, '.ocard[data-id="1"]'));
+  await settle();
+  check(
+    "dragged from the top of a sprint onto a card in it, it's linked there and leaves the top",
+    S.O.get(1).kids.D.includes(6) &&
+      S.C.get(3).kids.D.includes(6) &&
+      !S.SP.get(3).items.includes(6) &&
+      S.D.get(6).via.has(3),
+  );
+  await expand(inLane(3, '.ocard[data-id="1"]'));
+  dragTo(
+    inLane(3, '.ocard[data-id="1"] .del[data-id="6"][data-parent="1"]'),
+    $("#board .lane.unlinked .lane-head"),
+  );
+  await settle();
+  check(
+    "dragged from a card to the pool, it's unlinked from that card",
+    !S.O.get(1).kids.D.includes(6) && S.C.get(3).kids.D.includes(6),
+  );
+
+  // copy deliverable 7 (at the top of Sprint 3), then paste it onto capability 2 in Sprint 2, then
+  // onto Sprint 2
+  inLane(3, '.del[data-id="7"]').click();
+  await settle();
+  pressCtrl("c");
+  inLane(2, ':scope > .lane-body > .cap[data-id="2"]').click();
+  await settle();
+  pressCtrl("v");
+  await settle();
+  check(
+    "pasting onto a card in a sprint links it there, and takes it out of nothing",
+    S.C.get(2).kids.D.includes(7) && S.SP.get(3).items.includes(7),
+  );
+  inLane(2, ".lane-head").click();
+  await settle();
+  pressCtrl("v");
+  await settle();
+  check(
+    "pasting with a sprint selected adds it to the sprint",
+    S.SP.get(2).items.includes(7),
   );
 }
 

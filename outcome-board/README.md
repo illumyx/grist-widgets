@@ -101,11 +101,18 @@ for the counts. Items are counted, not weighted by effort, since few have an eff
 - Outcomes are cards here. Their arrow (or Space) opens one to show what its list on the outcome board holds: its
   capability cards, then the deliverables and tasks linked to it directly. A filter opens it to what matches under it.
 - "Hide done" starts ticked here, and notes don't show sprint pills (the list they're in says which sprint).
-- Drag from the pool into a sprint to add an item; from one sprint to another to move it; back to the pool to
-  take it out. Tasks can be dragged from the side pane. Within a sprint, drag an item up or down to reorder it
-  among the others of its kind (outcomes, capabilities, deliverables, tasks stay in that order).
-- x (or Delete) on an item in a sprint takes it out. Items that are only there through a parent have no x.
-- Ctrl/Cmd+C an item, select a sprint, Ctrl/Cmd+V adds it.
+- Drag from the pool into a sprint (its open space or its header) to add an item; from one sprint to another to move
+  it; back to the pool to take it out. Tasks can be dragged from the side pane. Within a sprint, drag an item up or
+  down to reorder it among the others of its kind (outcomes, capabilities, deliverables, tasks stay in that order).
+  Dragging something out of a card into a sprint adds it to the sprint and keeps its link to the card.
+- Cards link the way they do on the outcome board, in the pool and in sprints: drop an item onto a card that can hold
+  it to link it there (moving it from the card it came from, if any), and drag it from a card to the pool to unlink it.
+  Its sprints don't change, except that an item dragged from the top of a sprint onto a card in that same sprint
+  leaves the top (it's in the sprint through the card).
+- x (or Delete) on an item at the top of a sprint takes it out of the sprint; on an item in a card, unlinks it from
+  that card.
+- Ctrl/Cmd+C an item, then select a card that can hold it and Ctrl/Cmd+V to link it there (as on the outcome board),
+  or select a sprint (or anything at its top) and Ctrl/Cmd+V to add it to the sprint.
 - "+ Add item" at the bottom of a sprint adds a new item (with no parent) to it.
 
 ## Add it in Grist
