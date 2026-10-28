@@ -558,6 +558,7 @@ function select(el) {
 document.addEventListener("click", (e) => {
   const t = e.target,
     note = noteOf(t);
+  if (ui.pool.menu && !t.closest(".pool-type")) closeTypeMenu();
   if (t.closest("[data-close]")) {
     ui.pane = null;
     render();
@@ -606,11 +607,8 @@ document.addEventListener("click", (e) => {
     ui.confirm = null;
     return render();
   }
-  if (t.closest("[data-pooltype]")) {
-    // a pool type chip: picks or unpicks its level
-    const k = t.closest("[data-pooltype]").dataset.pooltype,
-      types = ui.pool.types;
-    types.has(k) ? types.delete(k) : types.add(k);
+  if (t.closest("[data-pooltypes]")) {
+    ui.pool.menu = !ui.pool.menu;
     return render();
   }
   if (t.closest("[data-poolview]")) {
@@ -698,6 +696,18 @@ document.addEventListener("change", (e) => {
       return render();
     }
     return el.value && sprintLink(+el.value, type, id, true);
+  }
+  if (el.matches("[data-pooltype]")) {
+    // the pool's Type menu: a level, or (Select all), ticked or unticked
+    const k = el.dataset.pooltype,
+      hidden = ui.pool.hidden;
+    if (k !== "all") el.checked ? hidden.delete(k) : hidden.add(k);
+    else if (el.checked) hidden.clear();
+    else
+      document
+        .querySelectorAll("[data-pooltype]:not([data-pooltype=all])")
+        .forEach((b) => hidden.add(b.dataset.pooltype));
+    return render();
   }
   if (el.matches("[data-hideplanned]")) {
     ui.pool.hidePlanned = el.checked;
@@ -1211,9 +1221,9 @@ export function poolHTML(note, levels, extra = "") {
     return `<section class="lane unlinked closed">
     <div class="lane-head" tabindex="0" data-type="O" data-id="0" data-parent="0" data-pool title="Show the pool"><span>›</span><span class="name">Pool</span></div></section>`;
   const p = ui.pool,
-    // a level's items in the pool, if its chip (or no chip) is picked
+    // a level's items in the pool, if it's ticked in the Type menu
     of = (k) =>
-      levels.includes(k) && (!p.types.size || p.types.has(k))
+      levels.includes(k) && !p.hidden.has(k)
         ? kidsOf(k, 0).map((id) => S[k].get(id))
         : [],
     // flat: what matches the search itself; nested: also what's there for what's under it that
@@ -1222,8 +1232,22 @@ export function poolHTML(note, levels, extra = "") {
     keep = (x) =>
       visible(x) &&
       (p.flat || x.type === "T" ? matches(x) : x.type !== "D" || hit(x)),
-    chip = (attr, value, label, on, title) =>
-      `<button type="button" class="type-chip" ${attr}="${value}" aria-pressed="${on}" title="${title}">${label}</button>`,
+    chip = (value, label, on, title) =>
+      `<button type="button" class="type-chip" data-poolview="${value}" aria-pressed="${on}" title="${title}">${label}</button>`,
+    shown = levels.filter((k) => !p.hidden.has(k)),
+    tick = (value, label, on) =>
+      `<label><input type="checkbox" data-pooltype="${value}"${on ? " checked" : ""}> ${label}</label>`,
+    // the Type menu (like a spreadsheet's column filter): a button saying which levels show, which
+    // opens a list of them to tick
+    typeMenu = `<div class="pool-type"><button type="button" class="type-chip" data-pooltypes aria-expanded="${p.menu}">Type: ${
+      shown.length === levels.length
+        ? "All"
+        : shown.map((k) => TYPES[k]).join(", ") || "None"
+    } ▾</button>${
+      p.menu
+        ? `<div class="pool-menu">${tick("all", "(Select all)", shown.length === levels.length)}${levels.map((k) => tick(k, TYPES[k], !p.hidden.has(k))).join("")}</div>`
+        : ""
+    }</div>`,
     body = drawWith(p, () => {
       const tasks = of("T").filter(keep);
       return `${of("O")
@@ -1247,11 +1271,27 @@ export function poolHTML(note, levels, extra = "") {
     <div class="lane-head" tabindex="0" data-type="O" data-id="0" data-parent="0">Pool<button class="pool-x" data-pool title="Hide the pool" aria-label="Hide the pool">‹</button>
       <span class="sub">${note}</span>
       <div class="pool-tools"><input type="search" data-poolq value="${esc(p.text)}" placeholder="Find in the pool" aria-label="Find in the pool">
-        <div class="type-chips">${levels.map((k) => chip("data-pooltype", k, TYPES[k], p.types.has(k), `Show only the levels picked (none: all)`)).join("")}</div>
-        <div class="type-chips">${chip("data-poolview", "nested", "Nested", !p.flat, "Items under nothing, with what's under them")}${chip("data-poolview", "flat", "Flat", p.flat, "Every item on its own")}</div>${extra}</div></div>
+        ${typeMenu}<div class="type-chips">${chip("nested", "Nested", !p.flat, "Items under nothing, with what's under them")}${chip("flat", "Flat", p.flat, "Every item on its own")}</div>${extra}</div></div>
     <div class="lane-body" data-drop="C" data-parent="0">${body}
       ${addItemHTML("pool", ["C", "D", "T"], 0)}</div></section>`;
 }
+
+// Close the pool's Type menu, without redrawing, so the click that closed it goes on to what it
+// clicked. Esc closes it too.
+function closeTypeMenu() {
+  ui.pool.menu = false;
+  $(".pool-menu")?.remove();
+  $("[data-pooltypes]")?.setAttribute("aria-expanded", "false");
+}
+document.addEventListener(
+  "keydown",
+  (e) => {
+    if (e.key !== "Escape" || !ui.pool.menu) return;
+    closeTypeMenu();
+    e.stopPropagation(); // (Esc otherwise also closes the side pane)
+  },
+  { capture: true },
+);
 
 // Draw a page's lists into #board, keeping each list's and the board's scroll position.
 let drawing = false; // redrawing (which takes the focus out of the "+ Add item" box)

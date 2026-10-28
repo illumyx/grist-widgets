@@ -91,6 +91,8 @@ input {
 }
 .lane {
   flex: 0 0 300px;
+  min-width: 0; /* every list stays 300px wide: what's in it wraps instead */
+  overflow-wrap: anywhere; /* even a long unbroken word, e.g. a file name */
   max-height: 100%;
   display: flex;
   flex-direction: column;
@@ -168,6 +170,31 @@ input {
   font-size: 12px;
   font-weight: 400;
   cursor: default;
+}
+/* the Type menu: a button, and the list of levels it opens (like a spreadsheet's column filter) */
+.pool-type {
+  position: relative;
+}
+.pool-menu {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 10px;
+  background: #fff;
+  border: 1px solid #b8c2cb;
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  white-space: nowrap;
+}
+.pool-menu label {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  cursor: pointer;
 }
 .pool-tools input[type="search"] {
   flex-basis: 100%;

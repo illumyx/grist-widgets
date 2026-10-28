@@ -177,14 +177,15 @@ export const ui = {
   // columns to set; a new sprint also has forType/forId, the item whose menu it replaced)
   confirm: null, // {type, id} of the item whose delete is waiting for confirmation
   // The pool's own settings (its header): its search box (text as typed; q, trimmed and lowercase),
-  // the levels its type chips pick (none: all of them), flat (every item on its own) or nested (only
-  // the items under nothing, with what's under them), and Hide planned (the sprints page). who: the
-  // toolbar's person menu doesn't apply to it.
+  // the levels unticked in its Type menu (hidden; menu: the menu is open), flat (every item on its
+  // own) or nested (only the items under nothing, with what's under them), and Hide planned (the
+  // sprints page). who: the toolbar's person menu doesn't apply to it.
   pool: {
     text: "",
     q: "",
     who: "",
-    types: new Set(),
+    hidden: new Set(),
+    menu: false,
     flat: false,
     hidePlanned: false, // leaves out items already in a planned or active sprint
   },

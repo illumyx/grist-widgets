@@ -22,8 +22,9 @@ at a card's left is its status, white (not started) to dark blue (done).
 - The Pool (first list) holds capabilities, then deliverables, then tasks. Nested (to start) shows the ones under
   nothing, laid out like an outcome list, so nothing shows twice; Flat shows every item once, on its own, without
   what's under it. Its header has its own search box (it finds what's under a card the way the toolbar's filter does)
-  and a chip per level: pick some to show only those levels (none picked: all). The toolbar's filter and person menu
-  don't apply to the pool; Hide done and Hide shelved do. Dragging from the pool adds a link; dragging into it
+  and a Type menu, like a spreadsheet's column filter: untick a level to leave it out ((Select all) ticks or unticks
+  them all); a click elsewhere or Esc closes it. The toolbar's filter and person menu don't apply to the pool; Hide
+  done and Hide shelved do. Lists stay the same width: long names wrap. Dragging from the pool adds a link; dragging into it
   unlinks. Pool items can be dragged into any order (saved as the table's row order).
 - "+ Add item" (at the bottom of an outcome list, an expanded capability, the pool, or a sprint) adds a new item
   there: pick its type with the chips (or Alt+O/C/D/T; it remembers the last one), type a name, Enter. The box
@@ -101,8 +102,8 @@ by status in the status colors (done at the left, so it fills up as items are do
 for the counts. Items are counted, not weighted by effort, since few have an effort. Click it to edit the sprint
 (name, status, dates, notes) or delete it (its items are kept). "+ Add sprint" adds one.
 
-- The pool starts with the outcomes (as cards, so nested, what's under an outcome is inside its card); it has an
-  Outcome chip here too. "Hide planned" leaves out items already in a planned or active sprint.
+- The pool starts with the outcomes (as cards, so nested, what's under an outcome is inside its card); its Type menu
+  has Outcome here too. "Hide planned" leaves out items already in a planned or active sprint.
 - Outcomes are cards here. Their arrow (or Space) opens one to show what its list on the outcome board holds: its
   capability cards, then the deliverables and tasks linked to it directly. A filter opens it to what matches under it.
 - "Hide done" starts ticked here, and notes don't show sprint pills (the list they're in says which sprint).

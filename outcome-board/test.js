@@ -103,11 +103,18 @@ const poolTop = () =>
   ]
     .map((n) => n.dataset.type + n.dataset.id)
     .join();
-// click a pool header chip: a type ("C") or the view ("flat", "nested")
+// click the pool's Nested or Flat ("nested", "flat")
 async function poolChip(value) {
-  $(
-    `#board .lane.unlinked [data-pooltype="${value}"], #board .lane.unlinked [data-poolview="${value}"]`,
-  ).click();
+  $(`#board .lane.unlinked [data-poolview="${value}"]`).click();
+  await settle();
+}
+// tick or untick a level ("C") or (Select all) ("all") in the pool's Type menu, opening it first
+async function poolType(value) {
+  if (!$(".pool-menu")) {
+    $("[data-pooltypes]").click();
+    await settle();
+  }
+  $(`[data-pooltype="${value}"]`).click();
   await settle();
 }
 // Ctrl+key on the selected note (Ctrl+C copies it, Ctrl+V pastes)
@@ -308,12 +315,16 @@ async function poolTests() {
     "clicking the strip opens the pool",
     !strip() && !!$("#board .lane.unlinked .lane-body"),
   );
+  $("[data-pooltypes]").click();
+  await settle();
   check(
-    "the pool's type chips here are capability, deliverable, and task",
-    [...document.querySelectorAll("#board .lane.unlinked [data-pooltype]")]
+    "the pool's Type menu here lists capability, deliverable, and task",
+    [...document.querySelectorAll("[data-pooltype]")]
       .map((b) => b.dataset.pooltype)
-      .join() === "C,D,T",
+      .join() === "all,C,D,T",
   );
+  $("[data-pooltypes]").click();
+  await settle();
 }
 
 // Outcome board, after poolTests: deliverable 6 is on capability 2, with task 10. The demo's
@@ -804,12 +815,39 @@ async function sprintsTests() {
     !$("#board .lane.unlinked .lane-body [data-type] [data-type]") &&
       !$("#board .lane.unlinked [data-toggle]"),
   );
-  await poolChip("D");
-  check("a type chip shows just that level", poolTop() === "D5,D6,D7");
-  await poolChip("T");
-  check("... two chips, both levels", poolTop() === "D5,D6,D7,T9,T10,T11");
-  await poolChip("D");
-  await poolChip("T");
+  const typeButton = () => $("[data-pooltypes]").textContent;
+  await poolType("all");
+  check(
+    "unticking (Select all) in the Type menu shows nothing",
+    poolTop() === "" && typeButton().includes("None"),
+  );
+  await poolType("D");
+  check("ticking a level shows just that level", poolTop() === "D5,D6,D7");
+  await poolType("T");
+  check(
+    "... two, both, and the button says which",
+    poolTop() === "D5,D6,D7,T9,T10,T11" &&
+      typeButton().includes("Deliverable, Task"),
+  );
+  inLane(3, ".lane-head").click();
+  await settle();
+  check(
+    "a click elsewhere closes the Type menu, and still does what it clicked",
+    !$(".pool-menu") && ui.pane?.type === "SP" && ui.pane.id === 3,
+  );
+  await poolType("all");
+  check(
+    "ticking (Select all) shows every level again",
+    poolTop() === "O1,C2,C3,C4,D5,D6,D7,T9,T10,T11" &&
+      typeButton().includes("All"),
+  );
+  $("[data-pooltypes]").dispatchEvent(
+    new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+  );
+  check(
+    "Esc closes the Type menu (and leaves the side pane open)",
+    !$(".pool-menu") && !ui.pool.menu && ui.pane?.id === 3,
+  );
   await poolSearch("survey");
   check(
     "flat, the pool's search shows just the items that match",
