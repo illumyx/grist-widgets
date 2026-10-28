@@ -45,28 +45,25 @@ import {
   $,
   page,
 } from "./core.js";
+import {
+  filters,
+  matches,
+  doneOf,
+  unhidden,
+  visible,
+  hit,
+  peopleOn,
+  matchesAll,
+  whoMenu,
+} from "./filters.js";
 
 // ---- Rendering -------------------------------------------------------------------------------------
-const q = () => $("#search").value.trim().toLowerCase();
-const hideDone = () => $("#hideDone").checked;
-const hideShelved = () => $("#hideShelved").checked;
-export const matches = (x) => !q() || x.name.toLowerCase().includes(q());
-export const doneOf = (x) => x.row[CFG.I.status] === DONE;
-// not hidden by Hide done or Hide shelved
-const unhidden = (x) =>
-  !(hideDone() && doneOf(x)) && !(hideShelved() && shelvedOf(x));
-// shown: not hidden, and (if the person menu picks someone) on the way to what it picks (see whoHit)
-export const visible = (x) => unhidden(x) && whoHit(x);
 // a shelved item (when shown) is drawn faded, with a Tabled or Archived tag
 export const shelfClass = (x) => (shelvedOf(x) ? " shelved" : "");
 export const shelfHTML = (x) =>
   shelvedOf(x)
     ? `<span class="pill shelf">${esc(x.row[CFG.I.shelved])}</span>`
     : "";
-// true if any shown task (by id) matches the filter; lets a deliverable be found by its tasks
-const taskHit = (ids) =>
-  ids.some((t) => visible(S.T.get(t)) && matches(S.T.get(t)));
-export const hit = (d) => matches(d) || taskHit(d.kids.T);
 // where an item is linked: "3 capabilities", or "3 places" when its parents are at different levels
 const onWhat = (x) => {
   const levels = new Set(x.parents.map((q) => S.all.get(q).type));
@@ -135,17 +132,6 @@ export function dueHTML(x) {
     ? `<span class="due${late ? " late" : ""}"${late ? ' title="Overdue"' : ""}>${esc(text)}</span>`
     : "";
 }
-// The people on an item: its own assignees, then those on anything shown under it (assignment says
-// who will act, so a parent is on whatever its children are). Hide done and Hide shelved decide
-// what's shown.
-const peopleOn = (x) => {
-  const all = new Set(assigneesOf(x));
-  for (const id of x.children) {
-    const c = S.all.get(id);
-    if (unhidden(c)) peopleOn(c).forEach((p) => all.add(p));
-  }
-  return all;
-};
 // the initials of the people an item is assigned to, then (faded) of the others on what's under it
 export const whoHTML = (x) => {
   const own = assigneesOf(x),
@@ -160,33 +146,6 @@ export const whoHTML = (x) => {
     ),
   ].join("");
 };
-// The toolbar's person menu: Anyone (""), a person's initials, or Unassigned.
-const UNASSIGNED = "(none)";
-const who = () => $("#who").value;
-// The item itself matches the person menu: that person is assigned to it, or (Unassigned) nobody is
-// on it or under it.
-const whoSelf = (x) =>
-  who() === UNASSIGNED ? !peopleOn(x).size : assigneesOf(x).includes(who());
-// Shown by the person menu: it, or anything shown under it, matches (so a card shows for what's
-// under it).
-const whoHit = (x) =>
-  !who() ||
-  whoSelf(x) ||
-  x.children.some((id) => unhidden(S.all.get(id)) && whoHit(S.all.get(id)));
-// Fill the person menu with Anyone, each person, and Unassigned (only when the people change).
-function whoMenu() {
-  const menu = $("#who"),
-    values = ["", ...S.people, UNASSIGNED];
-  if ([...menu.options].map((o) => o.value).join() === values.join()) return;
-  const was = menu.value;
-  menu.innerHTML = values
-    .map(
-      (v) =>
-        `<option value="${esc(v)}">${esc(v === "" ? "Anyone" : v === UNASSIGNED ? "Unassigned" : v)}</option>`,
-    )
-    .join("");
-  menu.value = values.includes(was) ? was : "";
-}
 // "Assign..." menu for a task in the checklist; picking a person assigns or unassigns them
 const assignMenu = (t) =>
   `<select data-assign aria-label="Assign"><option value="">Assign...</option>${S.people.map((p) => `<option value="${esc(p)}">${assigneesOf(t).includes(p) ? "✓ " : ""}${esc(p)}</option>`).join("")}</select>`;
@@ -322,7 +281,7 @@ export function delHTML(d, cap, xTitle = "Remove from this capability") {
   const tasks = d.kids.T.map((t) => S.T.get(t)).filter((t) => !shelvedOf(t)),
     done = tasks.filter(doneOf).length;
   const st = d.row[CFG.I.status] || "";
-  const filtering = (q() && !matches(d)) || (who() && !whoSelf(d)),
+  const filtering = !matchesAll(d),
     open = ui.expanded.has(ekey(cap, d.id)) || !!filtering;
   return `<div class="del${shelfClass(d)}${paneIs("D", d.id) ? " open" : ""}" data-drag tabindex="0" data-type="D" data-id="${d.id}" data-parent="${cap}"${statusAttr(d)}>
     <button class="chev" data-toggle aria-expanded="${open}" aria-label="${open ? "Collapse" : "Expand"}">${open ? "▾" : "▸"}</button>${urgHTML(d.row[CFG.I.urgency])}${esc(d.name)}${copies(d)}${dueHTML(d)}
@@ -365,7 +324,7 @@ export function capHTML(c, out, xTitle = "Remove from this outcome") {
   const shown = dels.filter(hit);
   const ownT = c.kids.T.map((t) => S.T.get(t)).filter(visible);
   // the card is only here for its matching deliverables/tasks (by name, or by person)
-  const filtering = (q() && !matches(c)) || (who() && !whoSelf(c));
+  const filtering = !matchesAll(c);
   if (filtering && !shown.length && !ownT.some(matches)) return "";
   const cst = c.row[CFG.I.status] || "";
   if (!visible(c)) return "";
@@ -398,7 +357,7 @@ export function capHTML(c, out, xTitle = "Remove from this outcome") {
 // to it directly. It opens by itself when it's only there for what's under it (that matches a filter
 // and it doesn't), showing just that.
 export function ocardHTML(o, parent, xTitle) {
-  const filtering = (q() && !matches(o)) || (who() && !whoSelf(o)),
+  const filtering = !matchesAll(o),
     open = ui.expanded.has(ekey(parent, o.id)) || !!filtering,
     X = "Remove from this outcome",
     body = open
@@ -504,7 +463,7 @@ function renderPane() {
             const u = t.row[CFG.I.urgency] || "";
             if (confirming("T", t.id))
               return `<div class="task" data-type="T" data-id="${t.id}" data-parent="${x.id}">${confirmHTML(ui.confirm)}</div>`;
-            return `<div class="task${doneOf(t) ? " done" : ""}${shelfClass(t)}${(q() || who()) && matches(t) && (!who() || whoSelf(t)) ? " hit" : ""}" data-drag tabindex="0" data-type="T" data-id="${t.id}" data-parent="${x.id}"${statusAttr(t)}>
+            return `<div class="task${doneOf(t) ? " done" : ""}${shelfClass(t)}${(filters.q || filters.who) && matchesAll(t) ? " hit" : ""}" data-drag tabindex="0" data-type="T" data-id="${t.id}" data-parent="${x.id}"${statusAttr(t)}>
         <input type="checkbox" data-check${doneOf(t) ? " checked" : ""} aria-label="Done">
         <span class="name" title="Open this task">${esc(t.name)}</span>${shelfHTML(t)}${optHTML(x.id, t.id)}${whoHTML(t)}
         <button class="urg" data-urg data-u="${esc(u)}" title="Urgency: ${esc(u || "Normal")} (click to change)" aria-label="Urgency: ${esc(u || "Normal")}">${URG_MARK[u] || ""}</button>
@@ -1282,10 +1241,6 @@ function afterRender() {
 }
 
 // ---- Toolbar ---------------------------------------------------------------------------------------
-$("#search").addEventListener("input", render);
-$("#hideDone").addEventListener("change", render);
-$("#hideShelved").addEventListener("change", render);
-$("#who").addEventListener("change", render);
 $("#expandAll").addEventListener("click", () => {
   // Open every note that opens (capabilities, deliverables, outcome cards). What's inside a closed one
   // isn't drawn until it opens, so open what's drawn and redraw until nothing new is left to open.

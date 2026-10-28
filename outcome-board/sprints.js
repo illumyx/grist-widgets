@@ -37,12 +37,10 @@ import {
   drawBoard,
   ocardHTML,
   paneIs,
-  visible,
-  matches,
-  hit,
   poolHTML,
   trowHTML,
 } from "./view.js";
+import { visible, matches, hit } from "./filters.js";
 
 ui.showAll = true; // the pool starts with every item ("Hide linked" unticked)
 let showCompleted = false;

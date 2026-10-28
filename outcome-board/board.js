@@ -16,9 +16,9 @@ import {
   shelfClass,
   shelfHTML,
   statusAttr,
-  visible,
   whoHTML,
 } from "./view.js";
+import { visible } from "./filters.js";
 
 // An outcome list: its capability cards, then deliverables and tasks linked to it directly.
 function laneHTML(o) {
