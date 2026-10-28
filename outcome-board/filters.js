@@ -88,6 +88,23 @@ const whoHit = (x) =>
   !active.who ||
   whoSelf(x) ||
   x.children.some((id) => unhidden(S.all.get(id)) && whoHit(S.all.get(id)));
+// Whose work an item is: its own assignees, or if it has none, those of its nearest parents that
+// have some (a task under a deliverable assigned to MK is MK's, unless it's assigned to someone else).
+export const ownersOf = (x) => {
+  const own = assigneesOf(x);
+  return new Set(
+    own.length ? own : x.parents.flatMap((id) => [...ownersOf(S.all.get(id))]),
+  );
+};
+// The item's work is the person menu's pick's (Unassigned: nobody's); always, for Anyone.
+export const forWho = (x) =>
+  !active.who ||
+  (active.who === UNASSIGNED ? !ownersOf(x).size : ownersOf(x).has(active.who));
+// a person menu value as it's shown: Anyone, initials, or Unassigned
+const whoName = (v) =>
+  v === "" ? "Anyone" : v === UNASSIGNED ? "Unassigned" : v;
+// the person menu's pick as it's shown, or "" for Anyone
+export const whoPicked = () => (active.who ? whoName(active.who) : "");
 // The item itself matches the search and the person menu. A card or note that doesn't is only shown
 // for what's under it that does (and opens to show it).
 export const matchesAll = (x) => matches(x) && (!active.who || whoSelf(x));
@@ -99,10 +116,7 @@ export function whoMenu() {
   if ([...menu.options].map((o) => o.value).join() === values.join()) return;
   const was = menu.value;
   menu.innerHTML = values
-    .map(
-      (v) =>
-        `<option value="${esc(v)}">${esc(v === "" ? "Anyone" : v === UNASSIGNED ? "Unassigned" : v)}</option>`,
-    )
+    .map((v) => `<option value="${esc(v)}">${esc(whoName(v))}</option>`)
     .join("");
   menu.value = values.includes(was) ? was : "";
   filters.who = menu.value;

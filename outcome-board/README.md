@@ -99,7 +99,9 @@ deliverables, and tasks as small rows), laid out like the pool; whatever is unde
 The header shows its dates (in bold under the name), status, and a progress bar: the leaves in the sprint (on their
 own or through a parent: items with nothing under them, or nothing but shelved items; shelved ones left out), stacked
 by status in the status colors (done at the left, so it fills up as items are done), then the share that's done; hover
-for the counts. Items are counted, not weighted by effort, since few have an effort. Click it to edit the sprint
+for the counts. Items are counted, not weighted by effort, since few have an effort. When the person menu picks
+someone, the bar counts just their work, with their initials before it: a leaf is the work of its assignees, or if it
+has none, of those on its nearest parents that have some (Unassigned: the work that's nobody's). Click it to edit the sprint
 (name, status, dates, notes) or delete it (its items are kept). "+ Add sprint" adds one.
 
 - The pool starts with the outcomes (as cards, so nested, what's under an outcome is inside its card); its Type menu

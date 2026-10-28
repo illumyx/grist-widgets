@@ -8,6 +8,7 @@
  * change the demo data, so reload to run them again. */
 
 import { S, ui, sprintLink, ekey, render } from "./core.js";
+import { ownersOf } from "./filters.js";
 
 const $ = (s) => document.querySelector(s);
 const settle = () => new Promise((r) => setTimeout(r, 50)); // let a change save and redraw
@@ -583,6 +584,36 @@ async function sprintsTests() {
   check(
     "... stacked by status, done first: a blank one counts as Not Started",
     bar(2) === "Done 33%, Not Started 67%",
+  );
+  // whose work: task 8 is DR's; task 9 has nobody, so it's MK's, like its deliverable 5; task 10
+  // has nobody, nor does anything above it
+  const owners = (id) => [...ownersOf(S.T.get(id))].join();
+  check(
+    "an item is the work of its assignees, else of its nearest parents' that have some",
+    owners(8) === "DR" && owners(9) === "MK" && owners(10) === "",
+  );
+  const whoOnBar = (sid) =>
+    $(`#board .lane-head[data-id="${sid}"] .progress .who`)?.textContent;
+  showFor("MK");
+  await settle();
+  check(
+    "picking a person, a sprint's bar counts just their work, and says whose (task 9)",
+    bar(2) === "Not Started 100%" && whoOnBar(2) === "MK",
+  );
+  showFor("DR");
+  await settle();
+  check("... (task 8)", bar(2) === "Done 100%" && whoOnBar(2) === "DR");
+  showFor("Unassigned");
+  await settle();
+  check(
+    "... Unassigned, the work that's nobody's (task 10)",
+    bar(2) === "Not Started 100%" && whoOnBar(2) === "Unassigned",
+  );
+  showFor("Anyone");
+  await settle();
+  check(
+    "... and Anyone, everyone's again",
+    bar(2) === "Done 33%, Not Started 67%" && !whoOnBar(2),
   );
   // with tasks 8 and 9 archived (and 11 tabled), deliverable 5 has nothing unshelved under it
   await shelve(8, "Archived");

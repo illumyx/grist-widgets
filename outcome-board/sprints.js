@@ -39,7 +39,7 @@ import {
   poolHTML,
   trowHTML,
 } from "./view.js";
-import { visible, matches, hit } from "./filters.js";
+import { visible, matches, hit, forWho, whoPicked } from "./filters.js";
 
 let showCompleted = false;
 const X = "Remove from this sprint";
@@ -49,16 +49,19 @@ function sprintHTML(sp) {
     // progress counts the leaves in the sprint, on their own or through a parent, that aren't
     // shelved: the items with nothing under them, or nothing but shelved items (a parent's work is
     // what's under it, so counting it too would count that work twice). An outcome with nothing
-    // under it counts too. Items are counted, not weighted by effort, since few have one; to weight
-    // them again, sum each one's Effort instead of counting it.
+    // under it counts too. When the person menu picks someone, only their work counts (see
+    // ownersOf). Items are counted, not weighted by effort, since few have one; to weight them
+    // again, sum each one's Effort instead of counting it.
     leaves = ["O", "C", "D", "T"].flatMap((type) =>
       [...S[type].values()].filter(
         (x) =>
           (x.own.has(sp.id) || x.via.has(sp.id)) &&
           !shelvedOf(x) &&
-          x.children.every((id) => shelvedOf(S.all.get(id))),
+          x.children.every((id) => shelvedOf(S.all.get(id))) &&
+          forWho(x),
       ),
     ),
+    who = whoPicked(),
     counts = STATUSES.map(
       (st) => leaves.filter((x) => statusOf(x) === st).length,
     ),
@@ -88,9 +91,11 @@ function sprintHTML(sp) {
   const total = leaves.length,
     pct = Math.round((100 * counts[STATUSES.indexOf(DONE)]) / total),
     stack = STATUSES.map((st, i) => [st, counts[i]]).reverse(),
-    tip = stack.map(([st, n]) => `${st}: ${n}`).join(", "),
+    tip =
+      (who ? `${who}: ` : "") +
+      stack.map(([st, n]) => `${st}: ${n}`).join(", "),
     progress = total
-      ? `<span class="progress" title="${tip}" aria-label="${tip}"><span class="bar">${stack
+      ? `<span class="progress" title="${esc(tip)}" aria-label="${esc(tip)}">${who ? `<span class="who">${esc(who)}</span>` : ""}<span class="bar">${stack
           .map(([st, n]) =>
             n
               ? `<span data-status="${esc(st)}" style="width:${(100 * n) / total}%"></span>`
