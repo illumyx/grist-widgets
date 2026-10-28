@@ -176,8 +176,18 @@ export const ui = {
   draft: null, // name being typed in place: {type, parent, text} for a new record (plus fields: extra
   // columns to set; a new sprint also has forType/forId, the item whose menu it replaced)
   confirm: null, // {type, id} of the item whose delete is waiting for confirmation
-  showAll: false, // pool shows every item, not just unlinked ones ("Hide linked" unticked)
-  hidePlanned: false, // pool leaves out items already in a planned or active sprint (sprints page)
+  // The pool's own settings (its header): its search box (text as typed; q, trimmed and lowercase),
+  // the levels its type chips pick (none: all of them), flat (every item on its own) or nested (only
+  // the items under nothing, with what's under them), and Hide planned (the sprints page). who: the
+  // toolbar's person menu doesn't apply to it.
+  pool: {
+    text: "",
+    q: "",
+    who: "",
+    types: new Set(),
+    flat: false,
+    hidePlanned: false, // leaves out items already in a planned or active sprint
+  },
   poolClosed: false, // the pool is collapsed to a strip (its < button)
 };
 
@@ -337,12 +347,12 @@ export async function act(actions, msg) {
 }
 
 export const kidsOf = (type, parent) =>
-  // children of a parent; parent 0 = the pool (unlinked items, or all of them)
+  // children of a parent; parent 0 = the pool (unlinked items, or all of them when it's flat)
   parent
     ? [...S.all.get(parent).kids[type]]
     : [...S[type].values()]
-        .filter((x) => ui.showAll || !x.parents.length)
-        .filter((x) => !(ui.hidePlanned && planned(x)))
+        .filter((x) => ui.pool.flat || !x.parents.length)
+        .filter((x) => !(ui.pool.hidePlanned && planned(x)))
         .map((x) => x.id);
 // in a sprint that isn't completed, directly or through a parent
 const planned = (x) =>

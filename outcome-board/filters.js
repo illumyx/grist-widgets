@@ -17,8 +17,10 @@ import {
 // initials, or UNASSIGNED), and the Hide done and Hide shelved boxes (each page's HTML says how they
 // start)
 export const filters = {};
+// search text as it's matched: trimmed, lowercase
+export const asQuery = (text) => text.trim().toLowerCase();
 function read() {
-  filters.q = $("#search").value.trim().toLowerCase();
+  filters.q = asQuery($("#search").value);
   filters.who = $("#who").value;
   filters.hideDone = $("#hideDone").checked;
   filters.hideShelved = $("#hideShelved").checked;
@@ -33,8 +35,23 @@ $("#hideDone").addEventListener("change", update);
 $("#hideShelved").addEventListener("change", update);
 read();
 
+// The search and person settings drawing reads: the toolbar's, or (while drawWith draws) another
+// set's, e.g. the pool's. Hide done and Hide shelved are the toolbar's everywhere.
+let active = filters;
+export function drawWith(settings, draw) {
+  const was = active;
+  active = settings;
+  try {
+    return draw();
+  } finally {
+    active = was;
+  }
+}
+// drawing flat (the pool's Flat): every item on its own, without what's under it
+export const flat = () => !!active.flat;
+
 export const matches = (x) =>
-  !filters.q || x.name.toLowerCase().includes(filters.q);
+  !active.q || x.name.toLowerCase().includes(active.q);
 export const doneOf = (x) => x.row[CFG.I.status] === DONE;
 // not hidden by Hide done or Hide shelved
 export const unhidden = (x) =>
@@ -62,18 +79,18 @@ const UNASSIGNED = "(none)";
 // The item itself matches the person menu: that person is assigned to it, or (Unassigned) nobody is
 // on it or under it.
 const whoSelf = (x) =>
-  filters.who === UNASSIGNED
+  active.who === UNASSIGNED
     ? !peopleOn(x).size
-    : assigneesOf(x).includes(filters.who);
+    : assigneesOf(x).includes(active.who);
 // Shown by the person menu: it, or anything shown under it, matches (so a card shows for what's
 // under it).
 const whoHit = (x) =>
-  !filters.who ||
+  !active.who ||
   whoSelf(x) ||
   x.children.some((id) => unhidden(S.all.get(id)) && whoHit(S.all.get(id)));
 // The item itself matches the search and the person menu. A card or note that doesn't is only shown
 // for what's under it that does (and opens to show it).
-export const matchesAll = (x) => matches(x) && (!filters.who || whoSelf(x));
+export const matchesAll = (x) => matches(x) && (!active.who || whoSelf(x));
 
 // Fill the person menu with Anyone, each person, and Unassigned (only when the people change).
 export function whoMenu() {

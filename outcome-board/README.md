@@ -19,9 +19,12 @@ at a card's left is its status, white (not started) to dark blue (done).
 - × on a note (or the Delete key) removes that one link; the record itself stays.
 - To delete a record, use Delete at the bottom of its side pane (or the trash icon on a task). You can
   also delete what's linked only under it; anything also linked elsewhere is kept.
-- The Pool (first list) holds unlinked capabilities, then deliverables, then tasks, laid out like an outcome list;
-  untick "Hide linked" to see all of them. Dragging from the pool adds a link; dragging into it unlinks. Pool items
-  can be dragged into any order (saved as the table's row order).
+- The Pool (first list) holds capabilities, then deliverables, then tasks. Nested (to start) shows the ones under
+  nothing, laid out like an outcome list, so nothing shows twice; Flat shows every item once, on its own, without
+  what's under it. Its header has its own search box (it finds what's under a card the way the toolbar's filter does)
+  and a chip per level: pick some to show only those levels (none picked: all). The toolbar's filter and person menu
+  don't apply to the pool; Hide done and Hide shelved do. Dragging from the pool adds a link; dragging into it
+  unlinks. Pool items can be dragged into any order (saved as the table's row order).
 - "+ Add item" (at the bottom of an outcome list, an expanded capability, the pool, or a sprint) adds a new item
   there: pick its type with the chips (or Alt+O/C/D/T; it remembers the last one), type a name, Enter. The box
   stays open for the next one; Esc closes it, and so does clicking away (adding what was typed).
@@ -63,7 +66,8 @@ at a card's left is its status, white (not started) to dark blue (done).
 - The filter matches capability, deliverable, and task names; matching tasks are highlighted in the side pane.
 - The person menu next to it shows what someone is on: the items assigned to them, and the lists, cards, and notes
   they sit in (a card shown only for what's under it opens to show it). "Unassigned" shows the items nobody is on or
-  under, and what they sit in. Both filters apply together; in the side pane, matching tasks are highlighted.
+  under, and what they sit in. Both filters apply together (not to the pool, which has its own search box); in the
+  side pane, matching tasks are highlighted.
 - The pool stays in place while the other lists scroll sideways. Its ‹ button collapses it to a slim strip (on both
   pages); click the strip to open it again. Notes dropped on the strip land in the pool, as usual.
 - When it's due (side pane): "Due by" a date, "Due from" the earliest it could be due (a range with both; on
@@ -97,7 +101,8 @@ by status in the status colors (done at the left, so it fills up as items are do
 for the counts. Items are counted, not weighted by effort, since few have an effort. Click it to edit the sprint
 (name, status, dates, notes) or delete it (its items are kept). "+ Add sprint" adds one.
 
-- The pool starts with every item, outcomes first; "Hide planned" leaves out items already in a planned or active sprint.
+- The pool starts with the outcomes (as cards, so nested, what's under an outcome is inside its card); it has an
+  Outcome chip here too. "Hide planned" leaves out items already in a planned or active sprint.
 - Outcomes are cards here. Their arrow (or Space) opens one to show what its list on the outcome board holds: its
   capability cards, then the deliverables and tasks linked to it directly. A filter opens it to what matches under it.
 - "Hide done" starts ticked here, and notes don't show sprint pills (the list they're in says which sprint).

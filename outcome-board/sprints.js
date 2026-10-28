@@ -20,7 +20,6 @@ import {
   sprintAction,
   unlink,
   canParent,
-  kidsOf,
   SPRINT_DONE,
   STATUSES,
   DONE,
@@ -42,7 +41,6 @@ import {
 } from "./view.js";
 import { visible, matches, hit } from "./filters.js";
 
-ui.showAll = true; // the pool starts with every item ("Hide linked" unticked)
 let showCompleted = false;
 const X = "Remove from this sprint";
 
@@ -111,12 +109,8 @@ page.render = () =>
     S.hasSprints
       ? poolHTML(
           "Drag notes here to take them out of a sprint",
-          ` <label class="toggle"><input type="checkbox" data-hideplanned${ui.hidePlanned ? " checked" : ""}> Hide planned</label>`,
-          kidsOf("O", 0)
-            .map((id) => S.O.get(id))
-            .filter(visible)
-            .map((o) => ocardHTML(o, 0))
-            .join(""),
+          ["O", "C", "D", "T"],
+          `<label class="toggle"><input type="checkbox" data-hideplanned${ui.pool.hidePlanned ? " checked" : ""}> Hide planned</label>`,
         ) +
           [...S.SP.values()]
             .filter((sp) => showCompleted || sp.status !== SPRINT_DONE)

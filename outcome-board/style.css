@@ -158,6 +158,24 @@ input {
   font-size: 12px;
   margin-top: 2px;
 }
+/* the pool's own search box, type chips, and Nested / Flat (view.js poolHTML) */
+.pool-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin-top: 6px;
+  font-size: 12px;
+  font-weight: 400;
+  cursor: default;
+}
+.pool-tools input[type="search"] {
+  flex-basis: 100%;
+  font: inherit;
+  padding: 3px 6px;
+  border: 1px solid #b8c2cb;
+  border-radius: 3px;
+}
 .lane-body {
   flex: 1;
   overflow-y: auto;

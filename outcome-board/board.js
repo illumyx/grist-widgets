@@ -37,7 +37,7 @@ function laneHTML(o) {
 
 page.render = () =>
   drawBoard(
-    poolHTML("Drag notes here to unlink them") +
+    poolHTML("Drag notes here to unlink them", ["C", "D", "T"]) +
       [...S.O.values()].filter(visible).map(laneHTML).join("") +
       addHTML("O", 0),
   );

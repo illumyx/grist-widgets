@@ -55,6 +55,9 @@ import {
   peopleOn,
   matchesAll,
   whoMenu,
+  drawWith,
+  flat,
+  asQuery,
 } from "./filters.js";
 
 // ---- Rendering -------------------------------------------------------------------------------------
@@ -275,6 +278,16 @@ const sprintTarget = (el) => {
 const sprintsHTML = (type, x) =>
   `<div class="sprints"><span class="label">Sprints</span>${pills(x, true)}${sprintMenu(type, x)}</div>`;
 
+// Is a note open (key: its copy, see ekey)? Opened with its arrow, or by itself when it's only there
+// for what's under it (filtering); never when drawing flat.
+const opens = (key, filtering) =>
+  !flat() && (ui.expanded.has(key) || !!filtering);
+// a note's arrow, which opens and closes it (none when drawing flat)
+const chevHTML = (open) =>
+  flat()
+    ? ""
+    : `<button class="chev" data-toggle aria-expanded="${open}" aria-label="${open ? "Collapse" : "Expand"}">${open ? "▾" : "▸"}</button>`;
+
 // A deliverable note. Its arrow opens it to show its tasks as rows; it opens by itself when it's only
 // there for its tasks (they match a filter and it doesn't), showing just those.
 export function delHTML(d, cap, xTitle = "Remove from this capability") {
@@ -282,9 +295,9 @@ export function delHTML(d, cap, xTitle = "Remove from this capability") {
     done = tasks.filter(doneOf).length;
   const st = d.row[CFG.I.status] || "";
   const filtering = !matchesAll(d),
-    open = ui.expanded.has(ekey(cap, d.id)) || !!filtering;
+    open = opens(ekey(cap, d.id), filtering);
   return `<div class="del${shelfClass(d)}${paneIs("D", d.id) ? " open" : ""}" data-drag tabindex="0" data-type="D" data-id="${d.id}" data-parent="${cap}"${statusAttr(d)}>
-    <button class="chev" data-toggle aria-expanded="${open}" aria-label="${open ? "Collapse" : "Expand"}">${open ? "▾" : "▸"}</button>${urgHTML(d.row[CFG.I.urgency])}${esc(d.name)}${copies(d)}${dueHTML(d)}
+    ${chevHTML(open)}${urgHTML(d.row[CFG.I.urgency])}${esc(d.name)}${copies(d)}${dueHTML(d)}
     <div class="meta">${tasks.length ? `<span>${done}/${tasks.length} tasks</span>` : ""}${st ? `<span>${esc(st)}</span>` : ""}${shelfHTML(d)}${optHTML(cap, d.id)}${whoHTML(d)}${pills(d)}</div>${metrics(d)}
     ${
       open
@@ -328,14 +341,14 @@ export function capHTML(c, out, xTitle = "Remove from this outcome") {
   if (filtering && !shown.length && !ownT.some(matches)) return "";
   const cst = c.row[CFG.I.status] || "";
   if (!visible(c)) return "";
-  const open = ui.expanded.has(ekey(out, c.id)) || !!filtering;
+  const open = opens(ekey(out, c.id), filtering);
   const list = filtering ? shown : dels;
   const urg = [...dels, ...ownT]
     .filter((d) => !doneOf(d) && !shelvedOf(d))
     .map((d) => d.row[CFG.I.urgency])
     .sort((x, y) => urgRank(y) - urgRank(x))[0];
   return `<div class="cap${shelfClass(c)}${paneIs("C", c.id) ? " open" : ""}" data-drag tabindex="0" data-type="C" data-id="${c.id}" data-parent="${out}"${statusAttr(c)}>
-    <div class="cap-title"><button class="chev" data-toggle aria-expanded="${open}" aria-label="${open ? "Collapse" : "Expand"}">${open ? "▾" : "▸"}</button>${urgHTML(urg, `Most urgent under it: ${urg}`)}${esc(c.name)}</div>${dueHTML(c)}
+    <div class="cap-title">${chevHTML(open)}${urgHTML(urg, `Most urgent under it: ${urg}`)}${esc(c.name)}</div>${dueHTML(c)}
     ${copies(c)}
     <div class="meta"><span>${plural(dels.length, "D")}</span>${ownT.length ? `<span>${plural(ownT.length, "T")}</span>` : ""}${shelfHTML(c)}${optHTML(out, c.id)}
 
@@ -358,7 +371,7 @@ export function capHTML(c, out, xTitle = "Remove from this outcome") {
 // and it doesn't), showing just that.
 export function ocardHTML(o, parent, xTitle) {
   const filtering = !matchesAll(o),
-    open = ui.expanded.has(ekey(parent, o.id)) || !!filtering,
+    open = opens(ekey(parent, o.id), filtering),
     X = "Remove from this outcome",
     body = open
       ? o.kids.C.map((c) => capHTML(S.C.get(c), o.id)).join("") +
@@ -367,7 +380,7 @@ export function ocardHTML(o, parent, xTitle) {
       : "";
   if (filtering && !body) return ""; // only here for what's under it, and none of that is shown
   return `<div class="ocard${shelfClass(o)}${paneIs("O", o.id) ? " open" : ""}" data-drag tabindex="0" data-type="O" data-id="${o.id}" data-parent="${parent}"${statusAttr(o)}>
-    <button class="chev" data-toggle aria-expanded="${open}" aria-label="${open ? "Collapse" : "Expand"}">${open ? "▾" : "▸"}</button>${esc(o.name)}${dueHTML(o)}
+    ${chevHTML(open)}${esc(o.name)}${dueHTML(o)}
     <div class="meta"><span>${plural(o.kids.C.length, "C")}</span>${shelfHTML(o)}${whoHTML(o)}</div>
     ${open ? `<div class="obody">${body}${addItemHTML(`oc${ekey(parent, o.id)}`, ["C", "D", "T"], o.id)}</div>` : ""}
     ${xTitle ? `<button class="x" data-unlink title="${xTitle}" aria-label="${xTitle}">×</button>` : ""}</div>`;
@@ -593,6 +606,17 @@ document.addEventListener("click", (e) => {
     ui.confirm = null;
     return render();
   }
+  if (t.closest("[data-pooltype]")) {
+    // a pool type chip: picks or unpicks its level
+    const k = t.closest("[data-pooltype]").dataset.pooltype,
+      types = ui.pool.types;
+    types.has(k) ? types.delete(k) : types.add(k);
+    return render();
+  }
+  if (t.closest("[data-poolview]")) {
+    ui.pool.flat = t.closest("[data-poolview]").dataset.poolview === "flat";
+    return render();
+  }
   if (t.closest(".pane-head, .teff")) return;
   if (t.closest(".draft, .additem")) return;
   if (t.closest("[data-additem]")) {
@@ -676,11 +700,7 @@ document.addEventListener("change", (e) => {
     return el.value && sprintLink(+el.value, type, id, true);
   }
   if (el.matches("[data-hideplanned]")) {
-    ui.hidePlanned = el.checked;
-    return render();
-  }
-  if (el.matches("[data-hidelinked]")) {
-    ui.showAll = !el.checked;
+    ui.pool.hidePlanned = el.checked;
     return render();
   }
   if (el.matches("[data-settype]")) {
@@ -721,6 +741,11 @@ document.addEventListener("input", (e) => {
   // grow the name box as you type
   if (e.target.matches("textarea.title, .draft")) grow(e.target);
   if (e.target.matches(".draft")) ui.draft.text = e.target.value;
+  if (e.target.matches("[data-poolq]")) {
+    ui.pool.text = e.target.value;
+    ui.pool.q = asQuery(e.target.value);
+    render();
+  }
 });
 
 document.addEventListener("focusout", (e) => {
@@ -1174,29 +1199,57 @@ document.addEventListener(
   { capture: true },
 );
 
-// The pool list: capabilities, then deliverables and tasks, like an outcome list's. note: the hint under
-// the title; extra: more header checkboxes; first: notes to put before the capabilities (the sprints
-// page's outcome cards). Its < button collapses it to a slim strip, which opens it again when clicked;
-// notes dropped on the strip land in the pool as usual.
-export function poolHTML(note, extra = "", first = "") {
+// The pool list: the items under nothing, each drawn with what's under it, like an outcome list's
+// (nested), or every item on its own (flat); outcomes (when levels has them: the sprints page), then
+// capabilities, deliverables, and tasks. Its header has its own search box, a type chip per level
+// (none picked: all), and Nested / Flat (see ui.pool); the toolbar's search and person menu don't
+// apply to it. note: the hint under the title; extra: more header controls. Its < button collapses it
+// to a slim strip, which opens it again when clicked; notes dropped on the strip land in the pool as
+// usual.
+export function poolHTML(note, levels, extra = "") {
   if (ui.poolClosed)
     return `<section class="lane unlinked closed">
     <div class="lane-head" tabindex="0" data-type="O" data-id="0" data-parent="0" data-pool title="Show the pool"><span>›</span><span class="name">Pool</span></div></section>`;
-  const tasks = kidsOf("T", 0)
-    .map((t) => S.T.get(t))
-    .filter(visible)
-    .filter(matches); // (unlike a card's own tasks, which show with their card)
+  const p = ui.pool,
+    // a level's items in the pool, if its chip (or no chip) is picked
+    of = (k) =>
+      levels.includes(k) && (!p.types.size || p.types.has(k))
+        ? kidsOf(k, 0).map((id) => S[k].get(id))
+        : [],
+    // flat: what matches the search itself; nested: also what's there for what's under it that
+    // matches (outcome and capability cards check that themselves). Tasks show on their own either way
+    // (unlike a card's own tasks, which show with their card).
+    keep = (x) =>
+      visible(x) &&
+      (p.flat || x.type === "T" ? matches(x) : x.type !== "D" || hit(x)),
+    chip = (attr, value, label, on, title) =>
+      `<button type="button" class="type-chip" ${attr}="${value}" aria-pressed="${on}" title="${title}">${label}</button>`,
+    body = drawWith(p, () => {
+      const tasks = of("T").filter(keep);
+      return `${of("O")
+        .filter(keep)
+        .map((o) => ocardHTML(o, 0))
+        .join("")}${of("C")
+        .filter(keep)
+        .map((c) => capHTML(c, 0))
+        .join("")}
+      ${directDelsHTML({
+        id: 0,
+        kids: {
+          D: of("D")
+            .filter(keep)
+            .map((d) => d.id),
+        },
+      })}
+      ${tasks.length ? `<div class="trows" data-drop="T" data-parent="0">${tasks.map((t) => trowHTML(t, 0)).join("")}</div>` : ""}`;
+    });
   return `<section class="lane unlinked">
     <div class="lane-head" tabindex="0" data-type="O" data-id="0" data-parent="0">Pool<button class="pool-x" data-pool title="Hide the pool" aria-label="Hide the pool">‹</button>
-      <span class="sub">${note} <label class="toggle"><input type="checkbox" data-hidelinked${ui.showAll ? "" : " checked"}> Hide linked</label>${extra}</span></div>
-    <div class="lane-body" data-drop="C" data-parent="0">${first}${kidsOf(
-      "C",
-      0,
-    )
-      .map((c) => capHTML(S.C.get(c), 0))
-      .join("")}
-      ${directDelsHTML({ id: 0, kids: { D: kidsOf("D", 0) } })}
-      ${tasks.length ? `<div class="trows" data-drop="T" data-parent="0">${tasks.map((t) => trowHTML(t, 0)).join("")}</div>` : ""}
+      <span class="sub">${note}</span>
+      <div class="pool-tools"><input type="search" data-poolq value="${esc(p.text)}" placeholder="Find in the pool" aria-label="Find in the pool">
+        <div class="type-chips">${levels.map((k) => chip("data-pooltype", k, TYPES[k], p.types.has(k), `Show only the levels picked (none: all)`)).join("")}</div>
+        <div class="type-chips">${chip("data-poolview", "nested", "Nested", !p.flat, "Items under nothing, with what's under them")}${chip("data-poolview", "flat", "Flat", p.flat, "Every item on its own")}</div>${extra}</div></div>
+    <div class="lane-body" data-drop="C" data-parent="0">${body}
       ${addItemHTML("pool", ["C", "D", "T"], 0)}</div></section>`;
 }
 
@@ -1206,6 +1259,10 @@ export function drawBoard(html) {
   const board = $("#board"),
     scroll = [...board.querySelectorAll(".lane-body")].map((e) => e.scrollTop),
     left = board.scrollLeft;
+  // typing in the pool's search box: where, so it can carry on in the redrawn one
+  const caret = document.activeElement?.matches("[data-poolq]")
+    ? document.activeElement.selectionStart
+    : null;
   drawing = true;
   board.innerHTML = html;
   drawing = false;
@@ -1213,6 +1270,11 @@ export function drawBoard(html) {
     .querySelectorAll(".lane-body")
     .forEach((e, i) => (e.scrollTop = scroll[i] || 0));
   board.scrollLeft = left;
+  const box = caret === null ? null : $("[data-poolq]");
+  if (box) {
+    box.focus({ preventScroll: true });
+    box.setSelectionRange(caret, caret);
+  }
   afterRender();
 }
 

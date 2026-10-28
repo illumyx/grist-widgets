@@ -86,6 +86,30 @@ const showFor = (label) =>
     $("#who"),
     [...$("#who").options].find((o) => o.text === label).value,
   );
+// type text into the pool's search box, as if typed there
+async function poolSearch(text) {
+  const box = $("[data-poolq]");
+  box.focus();
+  box.value = text;
+  box.dispatchEvent(new Event("input", { bubbles: true }));
+  await settle();
+}
+// the pool's notes at its top (not the ones inside cards), e.g. "O1,C4"
+const poolTop = () =>
+  [
+    ...$("#board .lane.unlinked .lane-body").querySelectorAll(
+      ":scope > [data-type], :scope > .dels > [data-type], :scope > .trows > [data-type]",
+    ),
+  ]
+    .map((n) => n.dataset.type + n.dataset.id)
+    .join();
+// click a pool header chip: a type ("C") or the view ("flat", "nested")
+async function poolChip(value) {
+  $(
+    `#board .lane.unlinked [data-pooltype="${value}"], #board .lane.unlinked [data-poolview="${value}"]`,
+  ).click();
+  await settle();
+}
 // Ctrl+key on the selected note (Ctrl+C copies it, Ctrl+V pastes)
 const pressCtrl = (key) =>
   $("#board .selected").dispatchEvent(
@@ -283,6 +307,12 @@ async function poolTests() {
   check(
     "clicking the strip opens the pool",
     !strip() && !!$("#board .lane.unlinked .lane-body"),
+  );
+  check(
+    "the pool's type chips here are capability, deliverable, and task",
+    [...document.querySelectorAll("#board .lane.unlinked [data-pooltype]")]
+      .map((b) => b.dataset.pooltype)
+      .join() === "C,D,T",
   );
 }
 
@@ -630,14 +660,29 @@ async function sprintsTests() {
     !!card().querySelector('.cap[data-id="2"]') &&
       !!card().querySelector('.cap[data-id="3"]'),
   );
+  await poolSearch("build a survey");
+  check(
+    "the pool's search opens an outcome card to just what matches under it",
+    !!inPool()?.querySelector('.cap[data-id="2"]') &&
+      !inPool().querySelector('.cap[data-id="3"]'),
+  );
+  check(
+    "... and typing in it keeps the focus in it",
+    document.activeElement === $("[data-poolq]") &&
+      $("[data-poolq]").value === "build a survey",
+  );
+  await poolSearch("");
+  $("[data-poolq]").blur();
   const search = $("#search");
   search.value = "build a survey";
   search.dispatchEvent(new Event("input"));
   await settle();
   check(
-    "a filter opens an outcome card to just what matches under it",
-    !!inPool()?.querySelector('.cap[data-id="2"]') &&
-      !inPool().querySelector('.cap[data-id="3"]'),
+    "the toolbar's search filters the sprints, not the pool",
+    !!card().querySelector('.cap[data-id="2"]') &&
+      !card().querySelector('.cap[data-id="3"]') &&
+      !!inPool() &&
+      !inPool().querySelector(".cap"),
   );
   search.value = "";
   search.dispatchEvent(new Event("input"));
@@ -678,6 +723,7 @@ async function sprintsTests() {
       S.D.get(7).via.has(2) &&
       !S.SP.get(2).items.includes(7),
   );
+  await expand($('#board .lane.unlinked .ocard[data-id="1"]'));
   await expand($('#board .lane.unlinked .cap[data-id="2"]'));
   dragTo(
     $('#board .lane.unlinked .cap[data-id="2"] .del[data-id="7"]'),
@@ -736,6 +782,50 @@ async function sprintsTests() {
     "pasting with a sprint selected adds it to the sprint",
     S.SP.get(2).items.includes(7),
   );
+
+  // The pool. Outcome 1 holds capabilities 2 and 3, which hold deliverables 5, 6, and 7 and their
+  // tasks; capability 4 is under nothing. (Hide done is ticked, so task 8 is hidden; Hide shelved
+  // isn't, so archived capability 4 and tabled task 11 show.)
+  check(
+    "nested, the pool's top has only what's under nothing",
+    poolTop() === "O1,C4",
+  );
+  showFor("DR");
+  await settle();
+  check("... and the person menu doesn't filter it", poolTop() === "O1,C4");
+  showFor("Anyone");
+  await poolChip("flat");
+  check(
+    "flat, it has every item once: outcomes, capabilities, deliverables, then tasks",
+    poolTop() === "O1,C2,C3,C4,D5,D6,D7,T9,T10,T11",
+  );
+  check(
+    "... each on its own, with no arrow to open it",
+    !$("#board .lane.unlinked .lane-body [data-type] [data-type]") &&
+      !$("#board .lane.unlinked [data-toggle]"),
+  );
+  await poolChip("D");
+  check("a type chip shows just that level", poolTop() === "D5,D6,D7");
+  await poolChip("T");
+  check("... two chips, both levels", poolTop() === "D5,D6,D7,T9,T10,T11");
+  await poolChip("D");
+  await poolChip("T");
+  await poolSearch("survey");
+  check(
+    "flat, the pool's search shows just the items that match",
+    poolTop() === "O1,C2,D5",
+  );
+  await poolSearch("");
+  $("[data-poolq]").blur();
+  $("[data-hideplanned]").click();
+  await settle();
+  check(
+    "Hide planned leaves out what's in a planned or active sprint, directly or through a parent",
+    poolTop() === "C4",
+  );
+  $("[data-hideplanned]").click();
+  await poolChip("nested");
+  check("Nested goes back", poolTop() === "O1,C4");
 }
 
 // show the results at the top of the page (and in the console)
