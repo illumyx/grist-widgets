@@ -2,16 +2,7 @@
  * let through. The settings are kept here as data (the toolbar's controls update them), so drawing
  * reads them rather than the controls. Used by every page. */
 
-import {
-  CFG,
-  DONE,
-  S,
-  shelvedOf,
-  assigneesOf,
-  esc,
-  render,
-  $,
-} from "./core.js";
+import { S, doneOf, shelvedOf, assigneesOf, esc, render, $ } from "./core.js";
 
 // The toolbar's settings: the search text (lowercase), the person menu (Anyone "", a person's
 // initials, or UNASSIGNED), and the Hide done and Hide shelved boxes (each page's HTML says how they
@@ -52,7 +43,6 @@ export const flat = () => !!active.flat;
 
 export const matches = (x) =>
   !active.q || x.name.toLowerCase().includes(active.q);
-export const doneOf = (x) => x.row[CFG.I.status] === DONE;
 // not hidden by Hide done or Hide shelved
 export const unhidden = (x) =>
   !(filters.hideDone && doneOf(x)) && !(filters.hideShelved && shelvedOf(x));

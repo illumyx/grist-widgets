@@ -136,6 +136,7 @@ export const plural = (n, type) =>
   `${n} ${n === 1 ? LABEL[type] : PLURAL[type]}`;
 export const DONE = "Done",
   NOT_STARTED = "Not Started";
+export const doneOf = (x) => x.row[CFG.I.status] === DONE;
 // an item's status, one of STATUSES: a blank one (or one that isn't in the list) counts as Not Started
 export const statusOf = (x) =>
   STATUSES.includes(x.row[CFG.I.status]) ? x.row[CFG.I.status] : NOT_STARTED;
@@ -623,6 +624,45 @@ export function sprintLink(sid, type, id, add, { from, before } = {}) {
       : within
         ? `Moved “${name}” within “${to}”.`
         : `${add ? "Added" : "Removed"} “${name}” ${add ? "to" : "from"} “${to}”.`,
+  );
+}
+
+// Done and nothing unfinished under it: everything under it is done too, or shelved.
+const finished = (x) =>
+  shelvedOf(x) ||
+  (doneOf(x) && x.children.every((id) => finished(S.all.get(id))));
+// What "Archive done" archives in a scope: the done items there that aren't shelved yet, leaving out
+// any with unfinished work under it (archiving an item hides what's under it). scope: a sprint
+// ({type: "SP", id}: what's in it, directly or through a parent), an item ({type, id}: it and
+// everything under it), or null (every item).
+export function doneIn(scope) {
+  let items = [...S.all.values()];
+  if (scope?.type === "SP")
+    items = items.filter((x) => x.own.has(scope.id) || x.via.has(scope.id));
+  else if (scope) {
+    const under = new Set(),
+      walk = (id) => {
+        if (under.has(id)) return;
+        under.add(id);
+        S.all.get(id).children.forEach(walk);
+      };
+    walk(scope.id);
+    items = items.filter((x) => under.has(x.id));
+  }
+  return items.filter((x) => !shelvedOf(x) && finished(x)).map((x) => x.id);
+}
+// Archive these items (Shelved = Archived), as one change; where says where, for the message.
+export function archive(ids, where) {
+  act(
+    [
+      [
+        "BulkUpdateRecord",
+        CFG.I.table,
+        ids,
+        { [CFG.I.shelved]: ids.map(() => "Archived") },
+      ],
+    ],
+    `Archived ${ids.length} done item${ids.length === 1 ? "" : "s"}${where}.`,
   );
 }
 

@@ -44,6 +44,10 @@ at a card's left is its status, white (not started) to dark blue (done).
   faded, with a Tabled or Archived tag. A shelved item isn't counted in its deliverable's tasks, its capability's
   urgency, a sprint's progress, or (in Grist) its parents' roll-ups; it isn't shown as late; and it doesn't bring
   what's under it into its sprints.
+- "Archive done" (toolbar) archives the done items in what's selected: a sprint (what's in it, directly or through a
+  parent), or an item and everything under it; with nothing selected (Esc), every done item. Its label says where and
+  how many, and it asks first. A done item with unfinished work under it is left alone (archiving it would hide that).
+  One Ctrl/Cmd+Z undoes it.
 - Click an outcome header, capability, or deliverable to open its details in the side pane: type, status, urgency,
   impact/effort estimates, and when it's due. "~8" means the number is an estimate; plain "8" is rolled up from linked items.
 - The side pane's Type changes an item's level (e.g. a deliverable into a task). Levels its children can't sit under

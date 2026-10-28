@@ -7,7 +7,7 @@
  * http://localhost:8000/sprints.html?test -- the results show at the top of the page. The tests
  * change the demo data, so reload to run them again. */
 
-import { S, ui, sprintLink, ekey, render } from "./core.js";
+import { S, ui, sprintLink, ekey, render, act } from "./core.js";
 import { ownersOf } from "./filters.js";
 
 const $ = (s) => document.querySelector(s);
@@ -895,6 +895,65 @@ async function sprintsTests() {
   $("[data-hideplanned]").click();
   await poolChip("nested");
   check("Nested goes back", poolTop() === "O1,C4");
+
+  // Archive done. Deliverables 6 and 7 are done too now; 6 has task 10 under it, not done. Sprint 3
+  // holds outcome 1, so everything under it.
+  await act([
+    ["BulkUpdateRecord", "Items", [6, 7], { Status: ["Done", "Done"] }],
+  ]);
+  const archiveLabel = () => $("#archiveDone").textContent,
+    archived = (id) => S.all.get(id).row.Shelved === "Archived",
+    answer = async (go) => {
+      $(`#archiveConfirm [data-archive="${go}"]`).click();
+      await settle();
+    };
+  inLane(3, ".lane-head").click();
+  await settle();
+  check(
+    "with a sprint selected, Archive done counts the done items in it, leaving out one with unfinished work under it (7 and task 8, not 6)",
+    archiveLabel() === "Archive 2 done in “Sprint 3”",
+  );
+  $("#archiveDone").click();
+  check(
+    "... it asks first",
+    !$("#archiveConfirm").hidden &&
+      $("#archiveConfirm").textContent.includes(
+        "Archive 2 done items in “Sprint 3”?",
+      ),
+  );
+  await answer("go");
+  check(
+    "... and archives them",
+    archived(7) && archived(8) && !archived(6) && $("#archiveConfirm").hidden,
+  );
+  await act([["UpdateRecord", "Items", 10, { Status: "Done" }]]);
+  document.body.dispatchEvent(
+    new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+  );
+  await settle();
+  check(
+    "with nothing selected, it counts every done item (6, now that task 10 is done, and 10)",
+    archiveLabel() === "Archive all 2 done",
+  );
+  $("#archiveDone").click();
+  await answer("cancel");
+  check(
+    "Cancel archives nothing",
+    !archived(6) && !archived(10) && !$("#archiveDone").hidden,
+  );
+  inLane(3, '.ocard[data-id="1"]').click();
+  await settle();
+  check(
+    "with an item selected, it counts the item and what's under it",
+    archiveLabel() ===
+      "Archive 2 done under “Sample client runs a survey in the portal”",
+  );
+  $("#archiveDone").click();
+  await answer("go");
+  check(
+    "... archives them, and then has nothing left to do",
+    archived(6) && archived(10) && $("#archiveDone").disabled,
+  );
 }
 
 // show the results at the top of the page (and in the console)

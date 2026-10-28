@@ -42,13 +42,15 @@ import {
   tableOf,
   addAction,
   rowOrderAction,
+  doneOf,
+  doneIn,
+  archive,
   $,
   page,
 } from "./core.js";
 import {
   filters,
   matches,
-  doneOf,
   unhidden,
   visible,
   hit,
@@ -553,6 +555,7 @@ function select(el) {
     .forEach((e) => e.classList.remove("selected"));
   ui.sel = el ? selOf(el) : null;
   el?.classList.add("selected");
+  archiveButton();
 }
 
 document.addEventListener("click", (e) => {
@@ -906,6 +909,7 @@ document.addEventListener("keydown", (e) => {
     select(null);
     ui.pane = null;
     ui.confirm = null;
+    askArchive(null);
     render();
   } else if (e.key === "Enter" && e.target.matches("[data-type]")) {
     // (a task in the side pane's checklist opens when its name is clicked)
@@ -1326,6 +1330,7 @@ function afterRender() {
     if (el) el.classList.add("selected");
     else ui.sel = null;
   }
+  archiveButton();
   renderPane();
   if (ui.sel && document.activeElement === document.body)
     findEl(ui.sel)?.focus({ preventScroll: true }); // re-render dropped focus; keep arrow keys working
@@ -1343,6 +1348,51 @@ function afterRender() {
 }
 
 // ---- Toolbar ---------------------------------------------------------------------------------------
+// "Archive done" archives the done items in what's selected: a sprint, or an item and everything
+// under it; with nothing selected, everywhere (see doneIn). Its label says where and how many, and it
+// asks first.
+const archiveScope = () => {
+  const s = ui.sel,
+    scope = s?.id ? { type: s.type, id: s.id } : null;
+  return {
+    scope,
+    where: !scope
+      ? ""
+      : scope.type === "SP"
+        ? ` in “${S.SP.get(scope.id)?.name}”`
+        : ` under “${nameOf(scope.id)}”`,
+  };
+};
+function archiveButton() {
+  const { scope, where } = archiveScope(),
+    n = doneIn(scope).length,
+    b = $("#archiveDone");
+  b.textContent = b.title = scope
+    ? `Archive ${n} done${where}`
+    : `Archive all ${n} done`;
+  b.disabled = !n;
+}
+// Ask before archiving these done items (ids; where, for the question), or (null) stop asking.
+let archiving = null;
+function askArchive(ask) {
+  archiving = ask;
+  $("#archiveDone").hidden = !!ask;
+  $("#archiveConfirm").hidden = !ask;
+  if (ask)
+    $("#archiveConfirm").innerHTML =
+      `<span>Archive ${ask.ids.length} done item${ask.ids.length === 1 ? "" : "s"}${esc(ask.where)}?</span>` +
+      `<button type="button" class="danger" data-archive="go">Archive</button><button type="button" data-archive="cancel">Cancel</button>`;
+}
+$("#archiveDone").addEventListener("click", () => {
+  const { scope, where } = archiveScope();
+  askArchive({ ids: doneIn(scope), where });
+});
+$("#archiveConfirm").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-archive]");
+  if (!b) return;
+  if (b.dataset.archive === "go") archive(archiving.ids, archiving.where);
+  askArchive(null);
+});
 $("#expandAll").addEventListener("click", () => {
   // Open every note that opens (capabilities, deliverables, outcome cards). What's inside a closed one
   // isn't drawn until it opens, so open what's drawn and redraw until nothing new is left to open.

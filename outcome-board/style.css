@@ -68,6 +68,27 @@ input {
   background: #fff;
   cursor: pointer;
 }
+/* "Archive done" (view.js archiveButton): its label says where, so a long name is cut short; and the
+   question it asks first */
+#archiveDone {
+  max-width: 22em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.archive-confirm {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.archive-confirm[hidden] {
+  display: none;
+}
+.archive-confirm .danger {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
 .toggle {
   display: flex;
   gap: 4px;
