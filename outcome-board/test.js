@@ -1,4 +1,4 @@
-/* In-browser tests for the boards -- dragging notes, shelved (tabled or archived) items, the
+/* In-browser tests for the boards -- dragging notes, statuses and shelved items (the Status menu), the
  * collapsible pool, who items can be assigned to, who's on what's under them, the person menu,
  * tasks' side panes, changing an item's level, tasks in deliverables, and outcomes on the sprints
  * page -- run
@@ -8,7 +8,7 @@
  * change the demo data, so reload to run them again. */
 
 import { S, ui, sprintLink, ekey, render, act } from "./core.js";
-import { ownersOf } from "./filters.js";
+import { ownersOf, menus, unhidden } from "./filters.js";
 
 const $ = (s) => document.querySelector(s);
 const settle = () => new Promise((r) => setTimeout(r, 50)); // let a change save and redraw
@@ -109,13 +109,29 @@ async function poolChip(value) {
   $(`#board .lane.unlinked [data-poolview="${value}"]`).click();
   await settle();
 }
-// tick or untick a level ("C") or (Select all) ("all") in the pool's Type menu, opening it first
-async function poolType(value) {
-  if (!$(".pool-menu")) {
-    $("[data-pooltypes]").click();
+// tick or untick a value ("C"; "all": (Select all)) in a filter menu ("type": the pool's Type menu,
+// "status": the toolbar's Status menu), opening it first
+async function menuTick(key, value) {
+  if (!menus[key].open) {
+    $(`[data-menu="${key}"]`).click();
     await settle();
   }
-  $(`[data-pooltype="${value}"]`).click();
+  $(
+    value === "all"
+      ? `[data-tick="${key}"][data-all]`
+      : `[data-tick="${key}"][value="${value}"]`,
+  ).click();
+  await settle();
+}
+const poolType = (value) => menuTick("type", value);
+const SHELVED = ["Dropped", "Tabled", "Paused", "Archived"],
+  ACTIVE = ["Not Started", "In Progress", "Under Review", "Done"];
+// set the toolbar's Status menu to show just these statuses (then close it)
+async function showStatuses(...statuses) {
+  for (const [st] of menus.status.values)
+    if (menus.status.hidden.has(st) === statuses.includes(st))
+      await menuTick("status", st);
+  if (menus.status.open) $('[data-menu="status"]').click();
   await settle();
 }
 // Ctrl+key on the selected note (Ctrl+C copies it, Ctrl+V pastes)
@@ -123,11 +139,11 @@ const pressCtrl = (key) =>
   $("#board .selected").dispatchEvent(
     new KeyboardEvent("keydown", { key, ctrlKey: true, bubbles: true }),
   );
-// shelve an item (or, with "", un-shelve it) from its side pane, which stays open
-async function shelve(id, value) {
+// set an item's status from its side pane, which stays open
+async function setStatus(id, status) {
   ui.pane = { type: S.all.get(id).type, id };
   render();
-  choose("Shelved", value);
+  choose("Status", status);
   await settle();
 }
 
@@ -225,13 +241,16 @@ async function dragTests() {
 }
 
 // Outcome board, after dragTests (deliverable 6 is now on capability 2). Demo data: capability 4 is
-// archived; deliverable 5 has tasks 8 (done), 9, and 11 (tabled); deliverable 6 is in Sprint 3, so
+// dropped; deliverable 5 has tasks 8 (done), 9, and 11 (tabled); deliverable 6 is in Sprint 3, so
 // its task 10 is too; deliverable 7 is overdue.
 async function shelvedTests() {
-  const hide = $("#hideShelved"),
-    shown = (sel) => !!$(`#board ${sel}`);
-  check("Hide shelved starts ticked", hide.checked);
-  check("an archived capability is hidden", !shown('.cap[data-id="4"]'));
+  const shown = (sel) => !!$(`#board ${sel}`);
+  check(
+    "the Status menu starts with the shelved statuses unticked",
+    SHELVED.every((st) => menus.status.hidden.has(st)) &&
+      ACTIVE.every((st) => !menus.status.hidden.has(st)),
+  );
+  check("a dropped capability is hidden", !shown('.cap[data-id="4"]'));
   del(2, 5).click();
   await settle();
   check(
@@ -243,43 +262,61 @@ async function shelvedTests() {
     del(2, 5).querySelector(".meta").textContent.includes("1/2 tasks"),
   );
 
-  hide.click(); // untick it
-  await settle();
+  await showStatuses(...SHELVED, ...ACTIVE);
   const cap4 = $('#board .cap[data-id="4"]');
   check(
-    "unticked, shelved items show, faded and tagged",
+    "ticked, shelved items show, faded and tagged with their status",
     cap4?.classList.contains("shelved") &&
-      cap4.querySelector(".shelf")?.textContent === "Archived" &&
+      cap4.querySelector(".shelf")?.textContent === "Dropped" &&
       $('#pane .task[data-id="11"] .shelf')?.textContent === "Tabled",
   );
-  hide.click(); // tick it again
-  await settle();
+  await showStatuses(...ACTIVE);
 
-  // shelving deliverable 6 from its side pane, then un-shelving it
+  // tabling deliverable 6 from its side pane, then taking it up again
   del(2, 6).click();
   await settle();
-  const menu = $('#pane select[data-field="Shelved"]');
+  const menu = $('#pane select[data-field="Status"]');
   check(
-    "the side pane has a Shelved menu: No, Tabled, Archived",
-    [...menu.options].map((o) => o.text).join() === "No,Tabled,Archived" &&
-      menu.value === "",
+    "the side pane's Status menu has every status, in order",
+    [...menu.options].map((o) => o.text).join() ===
+      "Dropped,Tabled,Not Started,In Progress,Paused,Under Review,Done,Archived" &&
+      menu.value === "Not Started",
   );
   const before = S.T.get(10).via.has(3);
-  choose("Shelved", "Tabled");
+  choose("Status", "Tabled");
   await settle();
   check(
-    "shelving it from the side pane saves it and hides it",
-    S.D.get(6).row.Shelved === "Tabled" && !del(2, 6),
+    "tabling it from the side pane saves it and hides it",
+    S.D.get(6).row.Status === "Tabled" && !del(2, 6),
   );
   check(
     "a shelved item doesn't bring what's under it into its sprint",
     before && !S.T.get(10).via.has(3),
   );
-  choose("Shelved", "");
+  check(
+    "what's only under a tabled item is filtered as tabled too (task 10)",
+    !unhidden(S.T.get(10)),
+  );
+  await showStatuses("Tabled");
+  check(
+    "with only Tabled ticked, the tabled items show, in the cards they're in (as context)",
+    !!del(2, 6) &&
+      !!del(3, 5)?.querySelector('.trow[data-id="11"]') &&
+      !del(3, 5).querySelector('.trow[data-id="9"]') &&
+      unhidden(S.T.get(10)),
+  );
+  check(
+    "... and the menu's button says what's ticked",
+    $('[data-menu="status"]').textContent.includes("Status: Tabled"),
+  );
+  await showStatuses(...ACTIVE);
+  choose("Status", "Not Started");
   await settle();
   check(
-    "choosing No un-shelves it",
-    !S.D.get(6).row.Shelved && !!del(2, 6) && S.T.get(10).via.has(3),
+    "choosing Not Started takes it up again",
+    S.D.get(6).row.Status === "Not Started" &&
+      !!del(2, 6) &&
+      S.T.get(10).via.has(3),
   );
 
   // an overdue item that's shelved isn't shown as late
@@ -287,15 +324,14 @@ async function shelvedTests() {
   check("an overdue item shows as late", late());
   $('#board .del[data-id="7"]').click();
   await settle();
-  hide.click(); // untick, to see it once it's shelved
-  choose("Shelved", "Archived");
+  await showStatuses(...SHELVED, ...ACTIVE); // to see it once it's dropped
+  choose("Status", "Dropped");
   await settle();
   check(
     "... but not once it's shelved",
     shown('.del[data-id="7"].shelved') && !late(),
   );
-  hide.click();
-  await settle();
+  await showStatuses(...ACTIVE);
 }
 
 // Outcome board, after shelvedTests: deliverable 5 is on capabilities 2 and 3.
@@ -316,15 +352,15 @@ async function poolTests() {
     "clicking the strip opens the pool",
     !strip() && !!$("#board .lane.unlinked .lane-body"),
   );
-  $("[data-pooltypes]").click();
+  $('[data-menu="type"]').click();
   await settle();
   check(
     "the pool's Type menu here lists capability, deliverable, and task",
-    [...document.querySelectorAll("[data-pooltype]")]
-      .map((b) => b.dataset.pooltype)
+    [...document.querySelectorAll('[data-tick="type"]')]
+      .map((b) => (b.hasAttribute("data-all") ? "all" : b.value))
       .join() === "all,C,D,T",
   );
-  $("[data-pooltypes]").click();
+  $('[data-menu="type"]').click();
   await settle();
 }
 
@@ -369,14 +405,12 @@ async function inheritedTests() {
     "... up to the outcome",
     who($('#board .lane-head[data-id="1"]')) === "~SU,~MK,~DR",
   );
-  $("#hideDone").click();
-  await settle();
+  await showStatuses("Not Started", "In Progress", "Under Review");
   check(
     "the people on hidden (done) items aren't counted",
     who(del(3, 5)) === "MK" && who(cap(3)) === "~MK",
   );
-  $("#hideDone").click();
-  await settle();
+  await showStatuses(...ACTIVE);
 }
 
 // Outcome board, after inheritedTests (see there). Deliverable 5 also has task 9, and deliverable
@@ -396,10 +430,9 @@ async function whoFilterTests() {
   showFor("DR");
   await settle();
   check("... which can be further down (task 8, done)", !!del(3, 5) && !cap(2));
-  $("#hideDone").click();
-  await settle();
+  await showStatuses("Not Started", "In Progress", "Under Review");
   check("... unless it's hidden", !$('#board .lane-head[data-id="1"]'));
-  $("#hideDone").click();
+  await showStatuses(...ACTIVE);
   showFor("Unassigned");
   await settle();
   check(
@@ -442,11 +475,11 @@ async function taskPaneTests() {
     "clicking a checklist task's name opens its own side pane",
     ui.pane?.type === "T" &&
       ui.pane.id === 9 &&
-      !!$('#pane select[data-field="Shelved"]'),
+      !!$('#pane select[data-field="Status"]'),
   );
-  choose("Shelved", "Tabled");
+  choose("Status", "Tabled");
   await settle();
-  check("... where it can be shelved", S.T.get(9).row.Shelved === "Tabled");
+  check("... where it can be tabled", S.T.get(9).row.Status === "Tabled");
   $('#pane .chip [data-open="5"]').click();
   await settle();
   check(
@@ -539,7 +572,7 @@ async function delTasksTests() {
   check("Space opens a deliverable too", !!row(3, 5, 10));
 
   // with the filter matching task 10 and not the deliverable, it opens by itself to just that task
-  $("#hideShelved").click(); // untick it, to show tabled task 9
+  await showStatuses(...SHELVED, ...ACTIVE); // to show tabled task 9
   $("#collapseAll").click();
   const search = $("#search");
   search.value = "draft";
@@ -551,8 +584,7 @@ async function delTasksTests() {
   );
   search.value = "";
   search.dispatchEvent(new Event("input"));
-  $("#hideShelved").click();
-  await settle();
+  await showStatuses(...ACTIVE);
 
   $("#collapseAll").click();
   $("#expandAll").click();
@@ -563,7 +595,7 @@ async function delTasksTests() {
   );
 }
 
-// Sprints page. Demo data: capability 4 (archived) is in the pool; Sprint 2 holds capability 2, so
+// Sprints page. Demo data: capability 4 (dropped) is in the pool; Sprint 2 holds capability 2, so
 // also its deliverable 5 and 5's tasks 8 (done), 9, and 11 (tabled); and task 10.
 async function sprintsTests() {
   const pool = (sel) => !!$(`#board .lane.unlinked ${sel}`),
@@ -616,23 +648,23 @@ async function sprintsTests() {
     bar(2) === "Done 33%, Not Started 67%" && !whoOnBar(2),
   );
   // with tasks 8 and 9 archived (and 11 tabled), deliverable 5 has nothing unshelved under it
-  await shelve(8, "Archived");
-  await shelve(9, "Archived");
+  await setStatus(8, "Archived");
+  await setStatus(9, "Archived");
   check(
     "an item with only shelved items under it counts as a leaf (5, in progress, and 10)",
     bar(2) === "In Progress 50%, Not Started 50%",
   );
-  await shelve(8, "");
-  await shelve(9, "");
+  await setStatus(8, "Done");
+  await setStatus(9, "Not Started");
   $("#pane [data-close]").click();
   await settle();
   check(
-    "Hide shelved starts ticked, hiding an archived capability",
-    $("#hideShelved").checked && !pool('.cap[data-id="4"]'),
+    "here the Status menu starts with Done unticked too, and the shelved statuses, hiding a dropped capability",
+    [...SHELVED, "Done"].every((st) => menus.status.hidden.has(st)) &&
+      !pool('.cap[data-id="4"]'),
   );
-  $("#hideShelved").click();
-  await settle();
-  check("unticked, it shows, faded", pool('.cap[data-id="4"].shelved'));
+  await showStatuses(...SHELVED, "Not Started", "In Progress", "Under Review");
+  check("ticked, it shows, faded", pool('.cap[data-id="4"].shelved'));
 
   // a task row opens the task's side pane (not its parent's)
   $('#board .lane.sprint .trow[data-id="10"]').click();
@@ -826,8 +858,8 @@ async function sprintsTests() {
   );
 
   // The pool. Outcome 1 holds capabilities 2 and 3, which hold deliverables 5, 6, and 7 and their
-  // tasks; capability 4 is under nothing. (Hide done is ticked, so task 8 is hidden; Hide shelved
-  // isn't, so archived capability 4 and tabled task 11 show.)
+  // tasks; capability 4 is under nothing. (The Status menu has Done unticked, so task 8 is hidden,
+  // and the shelved statuses ticked, so dropped capability 4 and tabled task 11 show.)
   check(
     "nested, the pool's top has only what's under nothing",
     poolTop() === "O1,C4",
@@ -846,7 +878,8 @@ async function sprintsTests() {
     !$("#board .lane.unlinked .lane-body [data-type] [data-type]") &&
       !$("#board .lane.unlinked [data-toggle]"),
   );
-  const typeButton = () => $("[data-pooltypes]").textContent;
+  const typeButton = () => $('[data-menu="type"]').textContent,
+    typeList = () => $('.check-menu[data-key="type"] .menu-list');
   await poolType("all");
   check(
     "unticking (Select all) in the Type menu shows nothing",
@@ -864,7 +897,7 @@ async function sprintsTests() {
   await settle();
   check(
     "a click elsewhere closes the Type menu, and still does what it clicked",
-    !$(".pool-menu") && ui.pane?.type === "SP" && ui.pane.id === 3,
+    !typeList() && ui.pane?.type === "SP" && ui.pane.id === 3,
   );
   await poolType("all");
   check(
@@ -872,12 +905,12 @@ async function sprintsTests() {
     poolTop() === "O1,C2,C3,C4,D5,D6,D7,T9,T10,T11" &&
       typeButton().includes("All"),
   );
-  $("[data-pooltypes]").dispatchEvent(
+  $('[data-menu="type"]').dispatchEvent(
     new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
   );
   check(
     "Esc closes the Type menu (and leaves the side pane open)",
-    !$(".pool-menu") && !ui.pool.menu && ui.pane?.id === 3,
+    !typeList() && !menus.type.open && ui.pane?.id === 3,
   );
   await poolSearch("survey");
   check(
@@ -902,7 +935,7 @@ async function sprintsTests() {
     ["BulkUpdateRecord", "Items", [6, 7], { Status: ["Done", "Done"] }],
   ]);
   const archiveLabel = () => $("#archiveDone").textContent,
-    archived = (id) => S.all.get(id).row.Shelved === "Archived",
+    archived = (id) => S.all.get(id).row.Status === "Archived",
     answer = async (go) => {
       $(`#archiveConfirm [data-archive="${go}"]`).click();
       await settle();

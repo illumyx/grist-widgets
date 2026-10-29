@@ -23,27 +23,31 @@ at a card's left is its status, white (not started) to dark blue (done).
   nothing, laid out like an outcome list, so nothing shows twice; Flat shows every item once, on its own, without
   what's under it. Its header has its own search box (it finds what's under a card the way the toolbar's filter does)
   and a Type menu, like a spreadsheet's column filter: untick a level to leave it out ((Select all) ticks or unticks
-  them all); a click elsewhere or Esc closes it. The toolbar's filter and person menu don't apply to the pool; Hide
-  done and Hide shelved do. Lists stay the same width: long names wrap. Dragging from the pool adds a link; dragging into it
+  them all); a click elsewhere or Esc closes it. The toolbar's filter and person menu don't apply to the pool; its
+  Status menu does. Lists stay the same width: long names wrap. Dragging from the pool adds a link; dragging into it
   unlinks. Pool items can be dragged into any order (saved as the table's row order).
 - "+ Add item" (at the bottom of an outcome list, an expanded capability, the pool, or a sprint) adds a new item
   there: pick its type with the chips (or Alt+O/C/D/T; it remembers the last one), type a name, Enter. The box
   stays open for the next one; Esc closes it, and so does clicking away (adding what was typed).
 - Clicking a task (a row on the page, or its name in a side pane's checklist; or Enter) opens its own side pane
-  (type, status, shelved, urgency, effort, assigned, when it's due, sprints). The parent chips at the top of a side
+  (type, status, urgency, effort, assigned, when it's due, sprints). The parent chips at the top of a side
   pane open the parent's.
 - Keys: arrows move between notes (up/down within a list or the task list, left/right across lists);
   Space expands a capability or deliverable; Enter opens the side pane.
 - "Expand all" opens every capability, deliverable, and (on the sprints page) outcome card; "Collapse all" closes them.
 - ×N means the note appears in N places; hovering outlines the other copies.
-- Every item has a status (Not Started / In Progress / Review / Done; blank counts as Not Started), shown by the colored
-  bar at the left of its card, note, row, or outcome header: white (not started), light blue, blue, dark blue (done).
-  A done capability shows as "Available", and "Hide done" hides done items (and done outcome lists).
-- Any item can be shelved with the side pane's Shelved menu: Tabled (not now, maybe later) or Archived (dropped).
-  "Hide shelved" (ticked to start, on both pages) hides shelved items and what's drawn under them; unticked, they show
-  faded, with a Tabled or Archived tag. A shelved item isn't counted in its deliverable's tasks, its capability's
-  urgency, a sprint's progress, or (in Grist) its parents' roll-ups; it isn't shown as late; and it doesn't bring
-  what's under it into its sprints.
+- Every item has a status, in the order it moves through them: Dropped (archived without being done), Tabled (put aside
+  before it started), Not Started, In Progress, Paused (put aside after it started), Under Review, Done, Archived (done
+  and put away); blank counts as Not Started. The colored bar at the left of its card, note, row, or outcome header
+  shows it: white (not started), light blue, blue, dark blue (done); a shelved status shows where it stopped (Tabled as
+  Not Started, Paused as In Progress, Archived as Done), and Dropped is gray. A done capability shows as "Available".
+- Dropped, Tabled, Paused, and Archived are shelved: drawn faded, with the status as a tag. A shelved item isn't counted
+  in its deliverable's tasks, its capability's urgency, a sprint's progress, or (in Grist) its parents' roll-ups; it
+  isn't shown as late; and it doesn't bring what's under it into its sprints.
+- The toolbar's Status menu (like a spreadsheet's column filter) picks the statuses shown: to start, every one but the
+  shelved ones (and, on the sprints page, Done). A card or list whose status isn't ticked still shows when something
+  under it is, opened to show it (as with the person menu). What's only under shelved items is filtered by their status:
+  the contents of a tabled capability show and hide with it.
 - "Archive done" (toolbar) archives the done items in what's selected: a sprint (what's in it, directly or through a
   parent), or an item and everything under it; with nothing selected (Esc), every done item. Its label says where and
   how many, and it asks first. A done item with unfinished work under it is left alone (archiving it would hide that).
@@ -62,7 +66,7 @@ at a card's left is its status, white (not started) to dark blue (done).
   (pick a name again to unassign). Their initials show on the card, note, or row. The people are the choices of the
   Items.Assignees column in Grist: add a choice there to add a person.
 - Assignment says who will act, so it rolls up: after its own initials, a card, note, or outcome header shows (faded)
-  the initials of the others on anything shown under it. "Hide done" and "Hide shelved" decide what's shown.
+  the initials of the others on anything shown under it. The Status menu decides what's shown.
 - Edit a name at the top of the side pane (Enter saves, Esc cancels).
 - Tasks: tick to mark done, click the small box to cycle urgency (normal / ! / !!), type an effort.
   A blank effort reads as 0 in Grist, so 0 means "not estimated".
@@ -112,7 +116,8 @@ has none, of those on its nearest parents that have some (Unassigned: the work t
   has Outcome here too. "Hide planned" leaves out items already in a planned or active sprint.
 - Outcomes are cards here. Their arrow (or Space) opens one to show what its list on the outcome board holds: its
   capability cards, then the deliverables and tasks linked to it directly. A filter opens it to what matches under it.
-- "Hide done" starts ticked here, and notes don't show sprint pills (the list they're in says which sprint).
+- The Status menu starts with Done unticked here too, and notes don't show sprint pills (the list they're in says
+  which sprint).
 - Drag from the pool into a sprint (its open space or its header) to add an item; from one sprint to another to move
   it; back to the pool to take it out. Tasks can be dragged from the side pane. Within a sprint, drag an item up or
   down to reorder it among the others of its kind (outcomes, capabilities, deliverables, tasks stay in that order).

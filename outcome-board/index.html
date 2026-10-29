@@ -23,12 +23,7 @@
       <select id="who" aria-label="Show what someone is on">
         <option value="">Anyone</option>
       </select>
-      <label class="toggle"
-        ><input id="hideDone" type="checkbox" /> Hide done</label
-      >
-      <label class="toggle" title="Hide tabled and archived items"
-        ><input id="hideShelved" type="checkbox" checked /> Hide shelved</label
-      >
+      <span id="statusMenu" data-hide="Dropped,Tabled,Paused,Archived"></span>
       <button id="expandAll" type="button">Expand all</button>
       <button id="collapseAll" type="button">Collapse all</button>
       <button id="archiveDone" type="button">Archive all done</button>

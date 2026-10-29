@@ -24,7 +24,6 @@ export const CFG = {
     note: "Review_Note",
     proposed: "Proposed_By",
     sprints: "Sprints", // two-way with Sprints.Items
-    shelved: "Shelved", // blank, or one of SHELVED
     // when it's due: by a date, from a date (the earliest it could be), and/or a note ("Ongoing")
     targetDate: "Target_Date",
     targetFrom: "Target_From",
@@ -53,40 +52,46 @@ export const TYPES = {
   D: "Deliverable",
   T: "Task",
 };
-// Items.Shelved choices (also in bin/extend_schema.py); blank means not shelved. A shelved item is
-// hidden unless "Hide shelved" is unticked, and is left out of its parents' roll-ups and sprints.
-export const SHELVED = ["Tabled", "Archived"];
-export const shelvedOf = (x) => !!x.row[CFG.I.shelved];
 export const tableOf = (type) => (type === "SP" ? CFG.SP : CFG.I).table;
 // Items have Impact/Effort (shown), *_Rollup (formula) and *_Estimate (entered).
 // Editable fields in the side pane, per level: [column, label, kind]
-// in order from not started to done (the status colors and sprint progress bars go the same way); a
-// done capability shows as "Available"
-export const STATUSES = ["Not Started", "In Progress", "Review", "Done"];
+// Items.Status, in the order an item moves through them (the status menus, colors, and sprint
+// progress bars go the same way; also in bin/extend_schema.py): Dropped (archived without being
+// done), Tabled (put aside before it started), ..., Paused (put aside after it started), ..., Archived
+// (done and put away). A done capability shows as "Available".
+export const STATUSES = [
+  "Dropped",
+  "Tabled",
+  "Not Started",
+  "In Progress",
+  "Paused",
+  "Under Review",
+  "Done",
+  "Archived",
+];
+// The statuses of shelved items: left out of their parents' roll-ups and sprints, and hidden to start
+// (the toolbar's Status menu).
+export const SHELVED = ["Dropped", "Tabled", "Paused", "Archived"];
 const SPRINT_STATUSES = ["Planned", "Active", "Completed"];
-// kind: "number", "urgency", "shelved", "date", "text", or a list of choices
+// kind: "number", "urgency", "date", "text", or a list of choices
 export const FIELDS = {
   O: [
     ["Status", "Status", STATUSES],
-    ["Shelved", "Shelved", "shelved"],
     ["Impact_Estimate", "Impact", "number"],
   ],
   C: [
     ["Status", "Status", STATUSES],
-    ["Shelved", "Shelved", "shelved"],
     ["Impact_Estimate", "Impact estimate", "number"],
     ["Effort_Estimate", "Effort estimate", "number"],
   ],
   D: [
     ["Status", "Status", STATUSES],
-    ["Shelved", "Shelved", "shelved"],
     ["Urgency", "Urgency", "urgency"],
     ["Impact_Estimate", "Impact estimate", "number"],
     ["Effort_Estimate", "Effort estimate", "number"],
   ],
   T: [
     ["Status", "Status", STATUSES],
-    ["Shelved", "Shelved", "shelved"],
     ["Urgency", "Urgency", "urgency"],
     ["Effort_Estimate", "Effort estimate", "number"],
   ],
@@ -135,11 +140,14 @@ const PLURAL = {
 export const plural = (n, type) =>
   `${n} ${n === 1 ? LABEL[type] : PLURAL[type]}`;
 export const DONE = "Done",
-  NOT_STARTED = "Not Started";
-export const doneOf = (x) => x.row[CFG.I.status] === DONE;
+  NOT_STARTED = "Not Started",
+  ARCHIVED = "Archived";
 // an item's status, one of STATUSES: a blank one (or one that isn't in the list) counts as Not Started
 export const statusOf = (x) =>
   STATUSES.includes(x.row[CFG.I.status]) ? x.row[CFG.I.status] : NOT_STARTED;
+export const shelvedOf = (x) => SHELVED.includes(statusOf(x));
+// done, or done and archived
+export const doneOf = (x) => [DONE, ARCHIVED].includes(statusOf(x));
 
 const api = window.GRIST_MOCK || grist;
 export const $ = (s, el = document) => el.querySelector(s);
@@ -178,15 +186,14 @@ export const ui = {
   // columns to set; a new sprint also has forType/forId, the item whose menu it replaced)
   confirm: null, // {type, id} of the item whose delete is waiting for confirmation
   // The pool's own settings (its header): its search box (text as typed; q, trimmed and lowercase),
-  // the levels unticked in its Type menu (hidden; menu: the menu is open), flat (every item on its
-  // own) or nested (only the items under nothing, with what's under them), and Hide planned (the
-  // sprints page). who: the toolbar's person menu doesn't apply to it.
+  // its Type menu (a filter menu: see filters.js; values, the page's levels, are set as it's drawn),
+  // flat (every item on its own) or nested (only the items under nothing, with what's under them),
+  // and Hide planned (the sprints page). who: the toolbar's person menu doesn't apply to it.
   pool: {
     text: "",
     q: "",
     who: "",
-    hidden: new Set(),
-    menu: false,
+    types: { name: "Type", values: [], hidden: new Set(), open: false },
     flat: false,
     hidePlanned: false, // leaves out items already in a planned or active sprint
   },
@@ -651,7 +658,7 @@ export function doneIn(scope) {
   }
   return items.filter((x) => !shelvedOf(x) && finished(x)).map((x) => x.id);
 }
-// Archive these items (Shelved = Archived), as one change; where says where, for the message.
+// Archive these items (Status = Archived), as one change; where says where, for the message.
 export function archive(ids, where) {
   act(
     [
@@ -659,7 +666,7 @@ export function archive(ids, where) {
         "BulkUpdateRecord",
         CFG.I.table,
         ids,
-        { [CFG.I.shelved]: ids.map(() => "Archived") },
+        { [CFG.I.status]: ids.map(() => ARCHIVED) },
       ],
     ],
     `Archived ${ids.length} done item${ids.length === 1 ? "" : "s"}${where}.`,

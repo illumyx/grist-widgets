@@ -22,6 +22,7 @@ import {
   canParent,
   SPRINT_DONE,
   STATUSES,
+  SHELVED,
   DONE,
   statusOf,
   shelvedOf,
@@ -43,6 +44,8 @@ import { visible, matches, hit, forWho, whoPicked } from "./filters.js";
 
 let showCompleted = false;
 const X = "Remove from this sprint";
+// the statuses a sprint's progress bar counts (shelved items aren't counted)
+const COUNTED = STATUSES.filter((st) => !SHELVED.includes(st));
 
 function sprintHTML(sp) {
   const k = sp.kids,
@@ -62,7 +65,7 @@ function sprintHTML(sp) {
       ),
     ),
     who = whoPicked(),
-    counts = STATUSES.map(
+    counts = COUNTED.map(
       (st) => leaves.filter((x) => statusOf(x) === st).length,
     ),
     dates = [sp.row[CFG.SP.start], sp.row[CFG.SP.end]]
@@ -89,8 +92,8 @@ function sprintHTML(sp) {
   // a bar stacked by status, from done to not started (so it fills from the left as items are
   // done), then the share that's done
   const total = leaves.length,
-    pct = Math.round((100 * counts[STATUSES.indexOf(DONE)]) / total),
-    stack = STATUSES.map((st, i) => [st, counts[i]]).reverse(),
+    pct = Math.round((100 * counts[COUNTED.indexOf(DONE)]) / total),
+    stack = COUNTED.map((st, i) => [st, counts[i]]).reverse(),
     tip =
       (who ? `${who}: ` : "") +
       stack.map(([st, n]) => `${st}: ${n}`).join(", "),

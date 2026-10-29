@@ -16,7 +16,6 @@ import {
   FIELDS,
   DUE_FIELDS,
   URGENCY,
-  SHELVED,
   shelvedOf,
   canParent,
   LABEL,
@@ -60,15 +59,18 @@ import {
   drawWith,
   flat,
   asQuery,
+  passes,
+  menus,
+  menuHTML,
 } from "./filters.js";
+
+menus.type = ui.pool.types; // the pool's Type menu
 
 // ---- Rendering -------------------------------------------------------------------------------------
 // a shelved item (when shown) is drawn faded, with a Tabled or Archived tag
 export const shelfClass = (x) => (shelvedOf(x) ? " shelved" : "");
 export const shelfHTML = (x) =>
-  shelvedOf(x)
-    ? `<span class="pill shelf">${esc(x.row[CFG.I.shelved])}</span>`
-    : "";
+  shelvedOf(x) ? `<span class="pill shelf">${esc(statusOf(x))}</span>` : "";
 // where an item is linked: "3 capabilities", or "3 places" when its parents are at different levels
 const onWhat = (x) => {
   const levels = new Set(x.parents.map((q) => S.all.get(q).type));
@@ -300,7 +302,7 @@ export function delHTML(d, cap, xTitle = "Remove from this capability") {
     open = opens(ekey(cap, d.id), filtering);
   return `<div class="del${shelfClass(d)}${paneIs("D", d.id) ? " open" : ""}" data-drag tabindex="0" data-type="D" data-id="${d.id}" data-parent="${cap}"${statusAttr(d)}>
     ${chevHTML(open)}${urgHTML(d.row[CFG.I.urgency])}${esc(d.name)}${copies(d)}${dueHTML(d)}
-    <div class="meta">${tasks.length ? `<span>${done}/${tasks.length} tasks</span>` : ""}${st ? `<span>${esc(st)}</span>` : ""}${shelfHTML(d)}${optHTML(cap, d.id)}${whoHTML(d)}${pills(d)}</div>${metrics(d)}
+    <div class="meta">${tasks.length ? `<span>${done}/${tasks.length} tasks</span>` : ""}${st && !shelvedOf(d) ? `<span>${esc(st)}</span>` : ""}${shelfHTML(d)}${optHTML(cap, d.id)}${whoHTML(d)}${pills(d)}</div>${metrics(d)}
     ${
       open
         ? directTasksHTML(d, "Remove from this deliverable", !!filtering) +
@@ -354,7 +356,7 @@ export function capHTML(c, out, xTitle = "Remove from this outcome") {
     ${copies(c)}
     <div class="meta"><span>${plural(dels.length, "D")}</span>${ownT.length ? `<span>${plural(ownT.length, "T")}</span>` : ""}${shelfHTML(c)}${optHTML(out, c.id)}
 
-      ${cst ? `<span class="pill${cst === DONE ? " ok" : ""}">${cst === DONE ? "✓ Available" : esc(cst)}</span>` : ""}
+      ${cst && !shelvedOf(c) ? `<span class="pill${cst === DONE ? " ok" : ""}">${cst === DONE ? "✓ Available" : esc(cst)}</span>` : ""}
       ${c.row[CFG.I.proposed] ? `<span class="pill">${esc(c.row[CFG.I.proposed])}</span>` : ""}${whoHTML(c)}${pills(c)}</div>
     ${metrics(c)}
     ${
@@ -391,7 +393,6 @@ export function ocardHTML(o, parent, xTitle) {
 // choice fields whose blank is a choice too: [choices, what the blank is called]
 const WITH_BLANK = {
   urgency: [URGENCY, "Normal"],
-  shelved: [["", ...SHELVED], "No"],
 };
 function renderPane() {
   const pane = $("#pane"),
@@ -468,7 +469,7 @@ function renderPane() {
       ${note ? `<div class="pane-note">${esc(note)}</div>` : ""}</div>`;
   if (L !== "SP" && L !== "T") {
     // the task checklist: a deliverable's tasks, or a capability's or outcome's direct ones (if any).
-    // It lists them all (unless hidden by Hide done or Hide shelved); the filters only highlight.
+    // It lists them all (unless the Status menu hides them); the other filters only highlight.
     const tasks = x.kids.T.map((t) => S.T.get(t)).filter(unhidden);
     if (L === "D" || tasks.length)
       html += `<div class="tasks" data-drop="T" data-parent="${x.id}">
@@ -561,7 +562,6 @@ function select(el) {
 document.addEventListener("click", (e) => {
   const t = e.target,
     note = noteOf(t);
-  if (ui.pool.menu && !t.closest(".pool-type")) closeTypeMenu();
   if (t.closest("[data-close]")) {
     ui.pane = null;
     render();
@@ -608,10 +608,6 @@ document.addEventListener("click", (e) => {
     const p = S.all.get(+t.closest("[data-open]").dataset.open);
     ui.pane = { type: p.type, id: p.id };
     ui.confirm = null;
-    return render();
-  }
-  if (t.closest("[data-pooltypes]")) {
-    ui.pool.menu = !ui.pool.menu;
     return render();
   }
   if (t.closest("[data-poolview]")) {
@@ -699,18 +695,6 @@ document.addEventListener("change", (e) => {
       return render();
     }
     return el.value && sprintLink(+el.value, type, id, true);
-  }
-  if (el.matches("[data-pooltype]")) {
-    // the pool's Type menu: a level, or (Select all), ticked or unticked
-    const k = el.dataset.pooltype,
-      hidden = ui.pool.hidden;
-    if (k !== "all") el.checked ? hidden.delete(k) : hidden.add(k);
-    else if (el.checked) hidden.clear();
-    else
-      document
-        .querySelectorAll("[data-pooltype]:not([data-pooltype=all])")
-        .forEach((b) => hidden.add(b.dataset.pooltype));
-    return render();
   }
   if (el.matches("[data-hideplanned]")) {
     ui.pool.hidePlanned = el.checked;
@@ -1221,37 +1205,26 @@ document.addEventListener(
 // to a slim strip, which opens it again when clicked; notes dropped on the strip land in the pool as
 // usual.
 export function poolHTML(note, levels, extra = "") {
+  ui.pool.types.values = levels.map((k) => [k, TYPES[k]]); // the page's levels, for the Type menu
   if (ui.poolClosed)
     return `<section class="lane unlinked closed">
     <div class="lane-head" tabindex="0" data-type="O" data-id="0" data-parent="0" data-pool title="Show the pool"><span>›</span><span class="name">Pool</span></div></section>`;
   const p = ui.pool,
     // a level's items in the pool, if it's ticked in the Type menu
     of = (k) =>
-      levels.includes(k) && !p.hidden.has(k)
+      levels.includes(k) && !p.types.hidden.has(k)
         ? kidsOf(k, 0).map((id) => S[k].get(id))
         : [],
-    // flat: what matches the search itself; nested: also what's there for what's under it that
-    // matches (outcome and capability cards check that themselves). Tasks show on their own either way
+    // flat: what passes the filters itself; nested: also what's there for what's under it that does
+    // (outcome and capability cards check that themselves). Tasks show on their own either way
     // (unlike a card's own tasks, which show with their card).
     keep = (x) =>
-      visible(x) &&
-      (p.flat || x.type === "T" ? matches(x) : x.type !== "D" || hit(x)),
+      p.flat
+        ? passes(x) && matches(x)
+        : visible(x) &&
+          (x.type === "T" ? matches(x) : x.type !== "D" || hit(x)),
     chip = (value, label, on, title) =>
       `<button type="button" class="type-chip" data-poolview="${value}" aria-pressed="${on}" title="${title}">${label}</button>`,
-    shown = levels.filter((k) => !p.hidden.has(k)),
-    tick = (value, label, on) =>
-      `<label><input type="checkbox" data-pooltype="${value}"${on ? " checked" : ""}> ${label}</label>`,
-    // the Type menu (like a spreadsheet's column filter): a button saying which levels show, which
-    // opens a list of them to tick
-    typeMenu = `<div class="pool-type"><button type="button" class="type-chip" data-pooltypes aria-expanded="${p.menu}">Type: ${
-      shown.length === levels.length
-        ? "All"
-        : shown.map((k) => TYPES[k]).join(", ") || "None"
-    } ▾</button>${
-      p.menu
-        ? `<div class="pool-menu">${tick("all", "(Select all)", shown.length === levels.length)}${levels.map((k) => tick(k, TYPES[k], !p.hidden.has(k))).join("")}</div>`
-        : ""
-    }</div>`,
     body = drawWith(p, () => {
       const tasks = of("T").filter(keep);
       return `${of("O")
@@ -1275,27 +1248,10 @@ export function poolHTML(note, levels, extra = "") {
     <div class="lane-head" tabindex="0" data-type="O" data-id="0" data-parent="0">Pool<button class="pool-x" data-pool title="Hide the pool" aria-label="Hide the pool">‹</button>
       <span class="sub">${note}</span>
       <div class="pool-tools"><input type="search" data-poolq value="${esc(p.text)}" placeholder="Find in the pool" aria-label="Find in the pool">
-        ${typeMenu}<div class="type-chips">${chip("nested", "Nested", !p.flat, "Items under nothing, with what's under them")}${chip("flat", "Flat", p.flat, "Every item on its own")}</div>${extra}</div></div>
+        ${menuHTML("type")}<div class="type-chips">${chip("nested", "Nested", !p.flat, "Items under nothing, with what's under them")}${chip("flat", "Flat", p.flat, "Every item on its own")}</div>${extra}</div></div>
     <div class="lane-body" data-drop="C" data-parent="0">${body}
       ${addItemHTML("pool", ["C", "D", "T"], 0)}</div></section>`;
 }
-
-// Close the pool's Type menu, without redrawing, so the click that closed it goes on to what it
-// clicked. Esc closes it too.
-function closeTypeMenu() {
-  ui.pool.menu = false;
-  $(".pool-menu")?.remove();
-  $("[data-pooltypes]")?.setAttribute("aria-expanded", "false");
-}
-document.addEventListener(
-  "keydown",
-  (e) => {
-    if (e.key !== "Escape" || !ui.pool.menu) return;
-    closeTypeMenu();
-    e.stopPropagation(); // (Esc otherwise also closes the side pane)
-  },
-  { capture: true },
-);
 
 // Draw a page's lists into #board, keeping each list's and the board's scroll position.
 let drawing = false; // redrawing (which takes the focus out of the "+ Add item" box)

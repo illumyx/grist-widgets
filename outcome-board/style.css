@@ -20,6 +20,7 @@
   --st-progress: #7fd6e3;
   --st-review: #00aec7;
   --st-done: #00587c;
+  --st-dropped: #b8c2cb; /* gray: dropped work isn't on that scale */
   --urgent: #c8102e;
   font-family: "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
   font-size: 14px;
@@ -193,10 +194,10 @@ input {
   cursor: default;
 }
 /* the Type menu: a button, and the list of levels it opens (like a spreadsheet's column filter) */
-.pool-type {
+.check-menu {
   position: relative;
 }
-.pool-menu {
+.menu-list {
   position: absolute;
   top: calc(100% + 2px);
   left: 0;
@@ -211,7 +212,7 @@ input {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
   white-space: nowrap;
 }
-.pool-menu label {
+.menu-list label {
   display: flex;
   gap: 6px;
   align-items: center;
@@ -413,17 +414,25 @@ input {
 }
 /* Status bar at the left of an item's card, note, or row, and of an outcome list's header (core.js
    statusOf: blank counts as Not Started); a sprint's progress bar stacks the same colors */
-[data-status="Not Started"] {
+/* A shelved status shows the color of where it stopped: Tabled as Not Started, Paused as In
+   Progress, Archived as Done; Dropped is gray. */
+[data-status="Not Started"],
+[data-status="Tabled"] {
   --st: var(--st-not-started);
 }
-[data-status="In Progress"] {
+[data-status="In Progress"],
+[data-status="Paused"] {
   --st: var(--st-progress);
 }
-[data-status="Review"] {
+[data-status="Under Review"] {
   --st: var(--st-review);
 }
-[data-status="Done"] {
+[data-status="Done"],
+[data-status="Archived"] {
   --st: var(--st-done);
+}
+[data-status="Dropped"] {
+  --st: var(--st-dropped);
 }
 .lane-head[data-status],
 .ocard[data-status],
