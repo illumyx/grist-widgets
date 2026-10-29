@@ -44,6 +44,12 @@ at a card's left is its status, white (not started) to dark blue (done).
 - Dropped, Tabled, Paused, and Archived are shelved: drawn faded, with the status as a tag. A shelved item isn't counted
   in its deliverable's tasks, its capability's urgency, a sprint's progress, or (in Grist) its parents' roll-ups; it
   isn't shown as late; and it doesn't bring what's under it into its sprints.
+- The toolbar's Nested / Flat says how the lists show what's in them (the pool has its own). Nested (to start): their
+  cards, with what's under them. Flat: everything under each list, at any depth, that the filters (search, person,
+  Status) let through, once each and on its own: capabilities, then deliverables, then tasks (outcomes first on the
+  sprints page, where a sprint holds what's in it directly or through a parent). Each note keeps the parent it's
+  linked through, so its x (and dragging it) takes it out of that parent; on the sprints page, only the sprint's own
+  items' x takes them out of the sprint.
 - The toolbar's Status menu (like a spreadsheet's column filter) picks the statuses shown: to start, every one but the
   shelved ones (and, on the sprints page, Done). A card or list whose status isn't ticked still shows when something
   under it is, opened to show it (as with the person menu). What's only under shelved items is filtered by their status:

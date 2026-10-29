@@ -369,6 +369,47 @@ export function capHTML(c, out, xTitle = "Remove from this outcome") {
     ${out ? `<button class="x" data-unlink title="${xTitle}" aria-label="${xTitle}">×</button>` : ""}</div>`;
 }
 
+// For drawing a list flat: these items and everything under them, at any depth, each once, with the
+// item it's first reached through (breadth first, so the nearest): [[item, parent id, top]], top for
+// the items given (their parent is the list's own, parent).
+export function reach(ids, parent) {
+  const via = new Map(ids.map((id) => [id, parent])),
+    queue = [...ids];
+  while (queue.length) {
+    const p = queue.shift();
+    for (const id of S.all.get(p).children)
+      if (!via.has(id)) {
+        via.set(id, p);
+        queue.push(id);
+      }
+  }
+  return [...via].map(([id, p]) => [S.all.get(id), p, ids.includes(id)]);
+}
+// A list drawn flat: of these [item, parent id, top] (see reach), the ones that pass the filters
+// themselves, each on its own: outcomes, capabilities, deliverables, then tasks. topTitle: the x's
+// title for the list's own items; the others' x takes them out of their parent.
+export function flatHTML(entries, topTitle) {
+  const of = (k) =>
+      entries.filter(([x]) => x.type === k && passes(x) && matches(x)),
+    title = ([, p, top]) =>
+      top ? topTitle : `Remove from this ${LABEL[S.all.get(p).type]}`,
+    dels = of("D");
+  return (
+    of("O")
+      .map((e) => ocardHTML(e[0], e[1], title(e)))
+      .join("") +
+    of("C")
+      .map((e) => capHTML(e[0], e[1], title(e)))
+      .join("") +
+    (dels.length
+      ? `<div class="dels">${dels.map((e) => delHTML(e[0], e[1], title(e))).join("")}</div>`
+      : "") +
+    of("T")
+      .map((e) => trowHTML(e[0], e[1], title(e)))
+      .join("")
+  );
+}
+
 // An outcome on the sprints page (in the pool or a sprint): a card whose arrow opens it to show what
 // an outcome list on the board holds -- its capability cards, then the deliverables and tasks linked
 // to it directly. It opens by itself when it's only there for what's under it (that matches a filter

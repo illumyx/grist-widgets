@@ -134,6 +134,23 @@ async function showStatuses(...statuses) {
   if (menus.status.open) $('[data-menu="status"]').click();
   await settle();
 }
+// the notes at the top of a list (the list whose header is the one with type and id), not those
+// inside cards, e.g. "C2,D5,T10"
+const listTop = (type, id) =>
+  [
+    ...$(`#board .lane-head[data-type="${type}"][data-id="${id}"]`)
+      .parentElement.querySelector(".lane-body")
+      .querySelectorAll(
+        ":scope > [data-type], :scope > .dels > [data-type], :scope > .trows > [data-type]",
+      ),
+  ]
+    .map((n) => n.dataset.type + n.dataset.id)
+    .join();
+// the toolbar's Nested or Flat ("nested", "flat")
+async function listView(value) {
+  $(`[data-listview="${value}"]`).click();
+  await settle();
+}
 // Ctrl+key on the selected note (Ctrl+C copies it, Ctrl+V pastes)
 const pressCtrl = (key) =>
   $("#board .selected").dispatchEvent(
@@ -157,6 +174,7 @@ async function run() {
   if (document.body.classList.contains("sprints-page")) return sprintsTests();
   openCaps();
   await settle();
+  await flatListTests();
   await dragTests();
   await shelvedTests();
   await poolTests();
@@ -238,6 +256,48 @@ async function dragTests() {
   pointer("pointermove", eff[0] + 30, eff[1]);
   check("pressing in a text box doesn't drag", !ui.drag);
   pointer("pointerup", eff[0] + 30, eff[1], 0);
+}
+
+// Outcome board, at the start: outcome 1 holds capabilities 2 and 3; 2 holds deliverable 5, and 3
+// holds 5 and 6; 5 has tasks 8 (done, DR's), 9, and 11 (tabled), and 6 has task 10.
+async function flatListTests() {
+  const lane = () => $('#board .lane-head[data-id="1"]').parentElement,
+    search = async (text) => {
+      $("#search").value = text;
+      $("#search").dispatchEvent(new Event("input"));
+      await settle();
+    };
+  await listView("flat");
+  check(
+    "flat, an outcome list shows everything under it that the filters let through, once each",
+    listTop("O", 1) === "C2,C3,D5,D6,T8,T9,T10",
+  );
+  check(
+    "... each on its own, with no arrow",
+    !lane().querySelector(".lane-body [data-type] [data-type]") &&
+      !lane().querySelector("[data-toggle]"),
+  );
+  const t10 = lane().querySelector('.trow[data-id="10"]');
+  check(
+    "... and under the parent it's linked through (task 10: deliverable 6)",
+    t10.dataset.parent === "6" &&
+      t10.querySelector(".x").title === "Remove from this deliverable",
+  );
+  await search("page");
+  check(
+    "... the filter shows just the items that match (deliverable 5, task 9)",
+    listTop("O", 1) === "D5,T9",
+  );
+  await search("");
+  showFor("DR");
+  await settle();
+  check("... and so does the person menu (task 8)", listTop("O", 1) === "T8");
+  showFor("Anyone");
+  await listView("nested");
+  check(
+    "Nested goes back: the capability cards, with what's under them",
+    listTop("O", 1) === "C2,C3" && !!lane().querySelector("[data-toggle]"),
+  );
 }
 
 // Outcome board, after dragTests (deliverable 6 is now on capability 2). Demo data: capability 4 is
@@ -598,6 +658,24 @@ async function delTasksTests() {
 // Sprints page. Demo data: capability 4 (dropped) is in the pool; Sprint 2 holds capability 2, so
 // also its deliverable 5 and 5's tasks 8 (done), 9, and 11 (tabled); and task 10.
 async function sprintsTests() {
+  // flat: Sprint 2 holds capability 2 (so deliverable 5 and its tasks) and task 10; done task 8 and
+  // tabled task 11 are hidden
+  await listView("flat");
+  const t9 = $('#board .lane.sprint .trow[data-id="9"]'),
+    t10 = $('#board .lane.sprint .trow[data-id="10"]');
+  check(
+    "flat, a sprint shows what's in it, directly or through a parent, once each",
+    listTop("SP", 2) === "C2,D5,T10,T9",
+  );
+  check(
+    "... its own items' x takes them out of the sprint, the others' out of their parent",
+    t10.dataset.parent === "2" &&
+      t10.querySelector(".x").title === "Remove from this sprint" &&
+      t9.dataset.parent === "5" &&
+      t9.querySelector(".x").title === "Remove from this deliverable",
+  );
+  await listView("nested");
+  check("Nested goes back", listTop("SP", 2) === "C2,T10");
   const pool = (sel) => !!$(`#board .lane.unlinked ${sel}`),
     progress = (sid) =>
       $(`#board .lane-head[data-id="${sid}"] .progress`)?.textContent,

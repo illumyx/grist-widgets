@@ -104,6 +104,17 @@ menus.status = {
   open: false,
 };
 $("#statusMenu").innerHTML = menuHTML("status");
+// The toolbar's Nested / Flat: how the lists (not the pool, which has its own) show what's in them.
+filters.flat = false;
+document.querySelectorAll("[data-listview]").forEach((b) =>
+  b.addEventListener("click", () => {
+    filters.flat = b.dataset.listview === "flat";
+    document
+      .querySelectorAll("[data-listview]")
+      .forEach((c) => c.setAttribute("aria-pressed", c === b));
+    render();
+  }),
+);
 
 // The search and person settings drawing reads: the toolbar's, or (while drawWith draws) another
 // set's, e.g. the pool's. The Status menu is the toolbar's everywhere.
@@ -117,7 +128,8 @@ export function drawWith(settings, draw) {
     active = was;
   }
 }
-// drawing flat (the pool's Flat): every item on its own, without what's under it
+// drawing flat (the toolbar's Flat, for the lists; the pool's): every item on its own, without
+// what's under it
 export const flat = () => !!active.flat;
 
 export const matches = (x) =>

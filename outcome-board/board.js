@@ -17,10 +17,13 @@ import {
   shelfHTML,
   statusAttr,
   whoHTML,
+  reach,
+  flatHTML,
 } from "./view.js";
-import { visible } from "./filters.js";
+import { visible, flat } from "./filters.js";
 
-// An outcome list: its capability cards, then deliverables and tasks linked to it directly.
+// An outcome list: its capability cards, then deliverables and tasks linked to it directly; or, flat,
+// everything under it, each on its own.
 function laneHTML(o) {
   const imp = num(o.row[CFG.I.impact]),
     counts = ["C", "D", "T"]
@@ -30,8 +33,12 @@ function laneHTML(o) {
   return `<section class="lane${shelfClass(o)}">
     <div class="lane-head${paneIs("O", o.id) ? " open" : ""}" tabindex="0" data-type="O" data-id="${o.id}" data-parent="0"${statusAttr(o)} data-drag title="Drag to reorder">${esc(o.name)}${dueHTML(o)}
       <span class="sub">${counts}${imp !== null && imp !== undefined ? ` · impact ${imp}` : ""}</span>${shelfHTML(o)}${whoHTML(o)}${pills(o)}</div>
-    <div class="lane-body" data-drop="C" data-parent="${o.id}">${o.kids.C.map((c) => capHTML(S.C.get(c), o.id)).join("")}
-      ${directDelsHTML(o, "Remove from this outcome")}${directTasksHTML(o, "Remove from this outcome")}
+    <div class="lane-body" data-drop="C" data-parent="${o.id}">${
+      flat()
+        ? flatHTML(reach(o.children, o.id), "Remove from this outcome")
+        : `${o.kids.C.map((c) => capHTML(S.C.get(c), o.id)).join("")}
+      ${directDelsHTML(o, "Remove from this outcome")}${directTasksHTML(o, "Remove from this outcome")}`
+    }
       ${addItemHTML(`O${o.id}`, ["C", "D", "T"], o.id)}</div></section>`;
 }
 

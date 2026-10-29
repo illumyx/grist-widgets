@@ -24,6 +24,26 @@
         <option value="">Anyone</option>
       </select>
       <span id="statusMenu" data-hide="Dropped,Tabled,Paused,Archived"></span>
+      <span class="type-chips">
+        <button
+          type="button"
+          class="type-chip"
+          data-listview="nested"
+          aria-pressed="true"
+          title="Each list shows its cards, with what's under them"
+        >
+          Nested
+        </button>
+        <button
+          type="button"
+          class="type-chip"
+          data-listview="flat"
+          aria-pressed="false"
+          title="Each list shows everything under it that the filters let through, each on its own"
+        >
+          Flat
+        </button>
+      </span>
       <button id="expandAll" type="button">Expand all</button>
       <button id="collapseAll" type="button">Collapse all</button>
       <button id="archiveDone" type="button">Archive all done</button>

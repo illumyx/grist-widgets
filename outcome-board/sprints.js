@@ -39,8 +39,10 @@ import {
   paneIs,
   poolHTML,
   trowHTML,
+  reach,
+  flatHTML,
 } from "./view.js";
-import { visible, matches, hit, forWho, whoPicked } from "./filters.js";
+import { visible, matches, hit, forWho, whoPicked, flat } from "./filters.js";
 
 let showCompleted = false;
 const X = "Remove from this sprint";
@@ -75,20 +77,27 @@ function sprintHTML(sp) {
     dels = k.D.map((id) => S.D.get(id))
       .filter(visible)
       .filter(hit),
-    body =
-      k.O.map((id) => S.O.get(id))
-        .filter(visible)
-        .map((o) => ocardHTML(o, sp.id, X))
-        .join("") +
-      k.C.map((id) => capHTML(S.C.get(id), sp.id, X)).join("") +
-      (dels.length
-        ? `<div class="dels">${dels.map((d) => delHTML(d, sp.id, X)).join("")}</div>`
-        : "") +
-      k.T.map((id) => S.T.get(id))
-        .filter(visible)
-        .filter(matches)
-        .map((t) => trowHTML(t, sp.id, X))
-        .join("");
+    body = flat()
+      ? flatHTML(
+          reach(
+            ["O", "C", "D", "T"].flatMap((type) => k[type]),
+            sp.id,
+          ).filter(([x]) => x.own.has(sp.id) || x.via.has(sp.id)),
+          X,
+        )
+      : k.O.map((id) => S.O.get(id))
+          .filter(visible)
+          .map((o) => ocardHTML(o, sp.id, X))
+          .join("") +
+        k.C.map((id) => capHTML(S.C.get(id), sp.id, X)).join("") +
+        (dels.length
+          ? `<div class="dels">${dels.map((d) => delHTML(d, sp.id, X)).join("")}</div>`
+          : "") +
+        k.T.map((id) => S.T.get(id))
+          .filter(visible)
+          .filter(matches)
+          .map((t) => trowHTML(t, sp.id, X))
+          .join("");
   // a bar stacked by status, from done to not started (so it fills from the left as items are
   // done), then the share that's done
   const total = leaves.length,
@@ -136,8 +145,16 @@ const sprintOf = (el) => {
 // a note drawn inside a card on the page (its data-parent is that card's item), not at the top of a
 // sprint (its data-parent is the sprint) or the pool
 const nested = (el) => !!el.parentElement.closest("#board [data-type]");
-// a note at the top of a sprint: an item directly in that sprint
-const atTop = (el) => !!sprintOf(el) && !nested(el);
+// a note at the top of a sprint: an item directly in that sprint (in a flat list, only those are;
+// the others are there through a parent)
+const atTop = (el) => {
+  const sid = sprintOf(el);
+  return (
+    !!sid &&
+    !nested(el) &&
+    !!S.SP.get(sid).kids[el.dataset.type]?.includes(+el.dataset.id)
+  );
+};
 
 // a sprint list's notes of one level, in order (its own items, not ones inside a capability)
 const GROUP = {
