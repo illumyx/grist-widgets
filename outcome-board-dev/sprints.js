@@ -14,6 +14,7 @@ import {
   page,
   render,
   esc,
+  rich,
   nameOf,
   sprintLink,
   unlink,
@@ -98,7 +99,7 @@ function sprintHTML(sp) {
           .join("")}</span>${pct}%</span>`
       : "";
   return `<section class="lane sprint" style="--sp:${sp.color}">
-    <div class="lane-head${paneIs("SP", sp.id) ? " open" : ""}" tabindex="0" data-type="SP" data-id="${sp.id}" data-parent="0" data-drag title="Drag to reorder">${esc(sp.name)}${dates ? `<span class="dates">${esc(dates)}</span>` : ""}
+    <div class="lane-head${paneIs("SP", sp.id) ? " open" : ""}" tabindex="0" data-type="SP" data-id="${sp.id}" data-parent="0" data-drag title="Drag to reorder">${rich(sp.name)}${dates ? `<span class="dates">${esc(dates)}</span>` : ""}
       <span class="sub">${esc(sp.status)}</span>${progress}</div>
     <div class="lane-body">${body || `<div class="empty">Nothing in this sprint yet.</div>`}${addItemHTML(`SP${sp.id}`, ["O", "C", "D", "T"], 0, sp.id, "T")}</div></section>`;
 }

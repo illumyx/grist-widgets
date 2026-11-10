@@ -147,6 +147,8 @@ export const esc = (s) =>
     /[&<>"]/g,
     (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c],
   );
+// esc() for display text, plus `ticked` spans shown as monospace (not for attributes or form fields)
+export const rich = (s) => esc(s).replace(/`([^`\n]+)`/g, "<code>$1</code>");
 const refs = (v) => (Array.isArray(v) ? (v[0] === "L" ? v.slice(1) : v) : []);
 
 export let S = {
