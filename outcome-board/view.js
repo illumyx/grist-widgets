@@ -22,6 +22,7 @@ import {
   plural,
   DONE,
   esc,
+  rich,
   S,
   ekey,
   ui,
@@ -180,7 +181,7 @@ function confirmHTML({ type, id }) {
     .map(([k, ids]) => plural(ids.length, k))
     .join(", ");
   const where = x.parents.length > 1 ? ` It's on ${onWhat(x)}.` : "";
-  return `<div class="confirm"><span>Delete “${esc(x.name)}”?${where}</span>
+  return `<div class="confirm"><span>Delete “${rich(x.name)}”?${where}</span>
     ${
       more
         ? `<button class="danger" data-go="one" title="What's under it moves to the pool">Delete only this</button>
@@ -301,7 +302,7 @@ export function delHTML(d, cap, xTitle = "Remove from this capability") {
   const filtering = !matchesAll(d),
     open = opens(ekey(cap, d.id), filtering);
   return `<div class="del${shelfClass(d)}${paneIs("D", d.id) ? " open" : ""}" data-drag tabindex="0" data-type="D" data-id="${d.id}" data-parent="${cap}"${statusAttr(d)}>
-    ${chevHTML(open)}${urgHTML(d.row[CFG.I.urgency])}${esc(d.name)}${copies(d)}${dueHTML(d)}
+    ${chevHTML(open)}${urgHTML(d.row[CFG.I.urgency])}${rich(d.name)}${copies(d)}${dueHTML(d)}
     <div class="meta">${tasks.length ? `<span>${done}/${tasks.length} tasks</span>` : ""}${st && !shelvedOf(d) ? `<span>${esc(st)}</span>` : ""}${shelfHTML(d)}${optHTML(cap, d.id)}${whoHTML(d)}${pills(d)}</div>${metrics(d)}
     ${
       open
@@ -316,7 +317,7 @@ export function delHTML(d, cap, xTitle = "Remove from this capability") {
 // opens its side pane.
 export const trowHTML = (t, parent, xTitle) =>
   `<div class="trow${doneOf(t) ? " done" : ""}${shelfClass(t)}${paneIs("T", t.id) ? " open" : ""}" data-drag tabindex="0" data-type="T" data-id="${t.id}" data-parent="${parent}"${statusAttr(t)}>
-    <input type="checkbox" data-check${doneOf(t) ? " checked" : ""} aria-label="Done"><span class="name">${urgHTML(t.row[CFG.I.urgency])}${esc(t.name)}</span>${dueHTML(t)}${shelfHTML(t)}${optHTML(parent, t.id)}${whoHTML(t)}${xTitle ? `<button class="x" data-unlink title="${xTitle}" aria-label="${xTitle}">×</button>` : ""}</div>`;
+    <input type="checkbox" data-check${doneOf(t) ? " checked" : ""} aria-label="Done"><span class="name">${urgHTML(t.row[CFG.I.urgency])}${rich(t.name)}</span>${dueHTML(t)}${shelfHTML(t)}${optHTML(parent, t.id)}${whoHTML(t)}${xTitle ? `<button class="x" data-unlink title="${xTitle}" aria-label="${xTitle}">×</button>` : ""}</div>`;
 
 // A card's or outcome list's own deliverables and tasks (linked directly, skipping a level)
 export function directDelsHTML(p, xTitle) {
@@ -352,7 +353,7 @@ export function capHTML(c, out, xTitle = "Remove from this outcome") {
     .map((d) => d.row[CFG.I.urgency])
     .sort((x, y) => urgRank(y) - urgRank(x))[0];
   return `<div class="cap${shelfClass(c)}${paneIs("C", c.id) ? " open" : ""}" data-drag tabindex="0" data-type="C" data-id="${c.id}" data-parent="${out}"${statusAttr(c)}>
-    <div class="cap-title">${chevHTML(open)}${urgHTML(urg, `Most urgent under it: ${urg}`)}${esc(c.name)}</div>${dueHTML(c)}
+    <div class="cap-title">${chevHTML(open)}${urgHTML(urg, `Most urgent under it: ${urg}`)}${rich(c.name)}</div>${dueHTML(c)}
     ${copies(c)}
     <div class="meta"><span>${plural(dels.length, "D")}</span>${ownT.length ? `<span>${plural(ownT.length, "T")}</span>` : ""}${shelfHTML(c)}${optHTML(out, c.id)}
 
@@ -425,7 +426,7 @@ export function ocardHTML(o, parent, xTitle) {
       : "";
   if (filtering && !body) return ""; // only here for what's under it, and none of that is shown
   return `<div class="ocard${shelfClass(o)}${paneIs("O", o.id) ? " open" : ""}" data-drag tabindex="0" data-type="O" data-id="${o.id}" data-parent="${parent}"${statusAttr(o)}>
-    ${chevHTML(open)}${esc(o.name)}${dueHTML(o)}
+    ${chevHTML(open)}${rich(o.name)}${dueHTML(o)}
     <div class="meta"><span>${plural(o.kids.C.length, "C")}</span>${shelfHTML(o)}${whoHTML(o)}</div>
     ${open ? `<div class="obody">${body}${addItemHTML(`oc${ekey(parent, o.id)}`, ["C", "D", "T"], o.id)}</div>` : ""}
     ${xTitle ? `<button class="x" data-unlink title="${xTitle}" aria-label="${xTitle}">×</button>` : ""}</div>`;
@@ -477,7 +478,7 @@ function renderPane() {
   // a parent's name, with a box to make the link to it optional
   // a parent's name (click it to open its side pane), with a box to make the link to it optional
   const chip = (q) =>
-    `<span class="chip"><button type="button" data-open="${q}" title="Open “${esc(nameOf(q))}”">${esc(nameOf(q))}</button>${S.hasWeights ? ` <label title="Optional for “${esc(nameOf(q))}”"><input type="checkbox" data-optional="${q}"${isOptional(q, x.id) ? " checked" : ""}> optional</label>` : ""}</span>`;
+    `<span class="chip"><button type="button" data-open="${q}" title="Open “${esc(nameOf(q))}”">${rich(nameOf(q))}</button>${S.hasWeights ? ` <label title="Optional for “${esc(nameOf(q))}”"><input type="checkbox" data-optional="${q}"${isOptional(q, x.id) ? " checked" : ""}> optional</label>` : ""}</span>`;
   // Type: levels its children don't allow are greyed out; a level one of its parents can't hold is
   // marked "(moves up)": choosing it moves the item up past that parent (see setType)
   const typeField = () => {
@@ -522,7 +523,7 @@ function renderPane() {
               return `<div class="task" data-type="T" data-id="${t.id}" data-parent="${x.id}">${confirmHTML(ui.confirm)}</div>`;
             return `<div class="task${doneOf(t) ? " done" : ""}${shelfClass(t)}${(filters.q || filters.who) && matchesAll(t) ? " hit" : ""}" data-drag tabindex="0" data-type="T" data-id="${t.id}" data-parent="${x.id}"${statusAttr(t)}>
         <input type="checkbox" data-check${doneOf(t) ? " checked" : ""} aria-label="Done">
-        <span class="name" title="Open this task">${esc(t.name)}</span>${shelfHTML(t)}${optHTML(x.id, t.id)}${whoHTML(t)}
+        <span class="name" title="Open this task">${rich(t.name)}</span>${shelfHTML(t)}${optHTML(x.id, t.id)}${whoHTML(t)}
         <button class="urg" data-urg data-u="${esc(u)}" title="Urgency: ${esc(u || "Normal")} (click to change)" aria-label="Urgency: ${esc(u || "Normal")}">${URG_MARK[u] || ""}</button>
         <input class="teff" type="number" step="any" data-teffort value="${esc(num(t.row[CFG.I.effortEstimate]) ?? "")}" placeholder="effort" aria-label="Effort">
         <span class="tsprints">${dueHTML(t)}${assignMenu(t)}${S.hasSprints ? sprintMenu("T", t) + pills(t, true) : ""}</span>
