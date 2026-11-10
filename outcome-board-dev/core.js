@@ -24,7 +24,6 @@ export const CFG = {
     note: "Review_Note",
     proposed: "Proposed_By",
     sprints: "Sprints", // two-way with Sprints.Items
-    shelved: "Shelved", // blank, or one of SHELVED
     // when it's due: by a date, from a date (the earliest it could be), and/or a note ("Ongoing")
     targetDate: "Target_Date",
     targetFrom: "Target_From",
@@ -53,40 +52,46 @@ export const TYPES = {
   D: "Deliverable",
   T: "Task",
 };
-// Items.Shelved choices (also in bin/extend_schema.py); blank means not shelved. A shelved item is
-// hidden unless "Hide shelved" is unticked, and is left out of its parents' roll-ups and sprints.
-export const SHELVED = ["Tabled", "Archived"];
-export const shelvedOf = (x) => !!x.row[CFG.I.shelved];
 export const tableOf = (type) => (type === "SP" ? CFG.SP : CFG.I).table;
 // Items have Impact/Effort (shown), *_Rollup (formula) and *_Estimate (entered).
 // Editable fields in the side pane, per level: [column, label, kind]
-// in order from not started to done (the status colors and sprint progress bars go the same way); a
-// done capability shows as "Available"
-export const STATUSES = ["Not Started", "In Progress", "Review", "Done"];
+// Items.Status, in the order an item moves through them (the status menus, colors, and sprint
+// progress bars go the same way; also in bin/extend_schema.py): Dropped (archived without being
+// done), Tabled (put aside before it started), ..., Paused (put aside after it started), ..., Archived
+// (done and put away). A done capability shows as "Available".
+export const STATUSES = [
+  "Dropped",
+  "Tabled",
+  "Not Started",
+  "In Progress",
+  "Paused",
+  "Under Review",
+  "Done",
+  "Archived",
+];
+// The statuses of shelved items: left out of their parents' roll-ups and sprints, and hidden to start
+// (the toolbar's Status menu).
+export const SHELVED = ["Dropped", "Tabled", "Paused", "Archived"];
 const SPRINT_STATUSES = ["Planned", "Active", "Completed"];
-// kind: "number", "urgency", "shelved", "date", "text", or a list of choices
+// kind: "number", "urgency", "date", "text", or a list of choices
 export const FIELDS = {
   O: [
     ["Status", "Status", STATUSES],
-    ["Shelved", "Shelved", "shelved"],
     ["Impact_Estimate", "Impact", "number"],
   ],
   C: [
     ["Status", "Status", STATUSES],
-    ["Shelved", "Shelved", "shelved"],
     ["Impact_Estimate", "Impact estimate", "number"],
     ["Effort_Estimate", "Effort estimate", "number"],
   ],
   D: [
     ["Status", "Status", STATUSES],
-    ["Shelved", "Shelved", "shelved"],
     ["Urgency", "Urgency", "urgency"],
     ["Impact_Estimate", "Impact estimate", "number"],
     ["Effort_Estimate", "Effort estimate", "number"],
   ],
   T: [
     ["Status", "Status", STATUSES],
-    ["Shelved", "Shelved", "shelved"],
     ["Urgency", "Urgency", "urgency"],
     ["Effort_Estimate", "Effort estimate", "number"],
   ],
@@ -135,10 +140,14 @@ const PLURAL = {
 export const plural = (n, type) =>
   `${n} ${n === 1 ? LABEL[type] : PLURAL[type]}`;
 export const DONE = "Done",
-  NOT_STARTED = "Not Started";
+  NOT_STARTED = "Not Started",
+  ARCHIVED = "Archived";
 // an item's status, one of STATUSES: a blank one (or one that isn't in the list) counts as Not Started
 export const statusOf = (x) =>
   STATUSES.includes(x.row[CFG.I.status]) ? x.row[CFG.I.status] : NOT_STARTED;
+export const shelvedOf = (x) => SHELVED.includes(statusOf(x));
+// done, or done and archived
+export const doneOf = (x) => [DONE, ARCHIVED].includes(statusOf(x));
 
 const api = window.GRIST_MOCK || grist;
 export const $ = (s, el = document) => el.querySelector(s);
@@ -178,8 +187,18 @@ export const ui = {
   draft: null, // name being typed in place: {type, parent, text} for a new record (plus fields: extra
   // columns to set; a new sprint also has forType/forId, the item whose menu it replaced)
   confirm: null, // {type, id} of the item whose delete is waiting for confirmation
-  showAll: false, // pool shows every item, not just unlinked ones ("Hide linked" unticked)
-  hidePlanned: false, // pool leaves out items already in a planned or active sprint (sprints page)
+  // The pool's own settings (its header): its search box (text as typed; q, trimmed and lowercase),
+  // its Type menu (a filter menu: see filters.js; values, the page's levels, are set as it's drawn),
+  // flat (every item on its own) or nested (only the items under nothing, with what's under them),
+  // and Hide planned (the sprints page). who: the toolbar's person menu doesn't apply to it.
+  pool: {
+    text: "",
+    q: "",
+    who: "",
+    types: { name: "Type", values: [], hidden: new Set(), open: false },
+    flat: false,
+    hidePlanned: false, // leaves out items already in a planned or active sprint
+  },
   poolClosed: false, // the pool is collapsed to a strip (its < button)
 };
 
@@ -339,12 +358,12 @@ export async function act(actions, msg) {
 }
 
 export const kidsOf = (type, parent) =>
-  // children of a parent; parent 0 = the pool (unlinked items, or all of them)
+  // children of a parent; parent 0 = the pool (unlinked items, or all of them when it's flat)
   parent
     ? [...S.all.get(parent).kids[type]]
     : [...S[type].values()]
-        .filter((x) => ui.showAll || !x.parents.length)
-        .filter((x) => !(ui.hidePlanned && planned(x)))
+        .filter((x) => ui.pool.flat || !x.parents.length)
+        .filter((x) => !(ui.pool.hidePlanned && planned(x)))
         .map((x) => x.id);
 // in a sprint that isn't completed, directly or through a parent
 const planned = (x) =>
@@ -387,8 +406,9 @@ function rowOrder(type, id, beforeId) {
   return rowOrderAction(type, all);
 }
 
-export function move(type, id, from, to, index, beforeId) {
-  const acts = [];
+// extra: more actions to apply with the move, as one change (e.g. taking it out of a sprint)
+export function move(type, id, from, to, index, beforeId, extra = []) {
+  const acts = [...extra];
   if (!to) acts.push(rowOrder(type, id, beforeId));
   if (from === to) {
     if (!to) return act(acts);
@@ -582,32 +602,76 @@ export function below(type, id) {
   return gone;
 }
 
+// The action that adds an item to a sprint (before the item before, if given, else at the end), or
+// takes it out.
+export function sprintAction(sid, id, add, before) {
+  const list = S.SP.get(sid).items.filter((x) => x !== id),
+    at = list.indexOf(before);
+  if (add) at < 0 ? list.push(id) : list.splice(at, 0, id);
+  return [
+    "UpdateRecord",
+    CFG.SP.table,
+    sid,
+    { [CFG.SP.items]: ["L", ...list] },
+  ];
+}
+
 // Add an item to a sprint, or take it out (explicit membership only).
 // Options: from (a sprint id): also take the item out of that sprint (a move); before (an item id):
 // place it before that item in its group instead of at the end (adding an item that's already in the
 // sprint just moves it there).
 export function sprintLink(sid, type, id, add, { from, before } = {}) {
-  const update = (sid, add) => {
-    const list = S.SP.get(sid).items.filter((x) => x !== id),
-      at = list.indexOf(before);
-    if (add) at < 0 ? list.push(id) : list.splice(at, 0, id);
-    return [
-      "UpdateRecord",
-      CFG.SP.table,
-      sid,
-      { [CFG.SP.items]: ["L", ...list] },
-    ];
-  };
   const name = nameOf(id),
     to = S.SP.get(sid).name,
     within = add && S.SP.get(sid).kids[type].includes(id);
   act(
-    from ? [update(from, false), update(sid, true)] : [update(sid, add)],
+    from
+      ? [sprintAction(from, id, false), sprintAction(sid, id, true, before)]
+      : [sprintAction(sid, id, add, before)],
     from
       ? `Moved “${name}” to “${to}”.`
       : within
         ? `Moved “${name}” within “${to}”.`
         : `${add ? "Added" : "Removed"} “${name}” ${add ? "to" : "from"} “${to}”.`,
+  );
+}
+
+// Done and nothing unfinished under it: everything under it is done too, or shelved.
+const finished = (x) =>
+  shelvedOf(x) ||
+  (doneOf(x) && x.children.every((id) => finished(S.all.get(id))));
+// What "Archive done" archives in a scope: the done items there that aren't shelved yet, leaving out
+// any with unfinished work under it (archiving an item hides what's under it). scope: a sprint
+// ({type: "SP", id}: what's in it, directly or through a parent), an item ({type, id}: it and
+// everything under it), or null (every item).
+export function doneIn(scope) {
+  let items = [...S.all.values()];
+  if (scope?.type === "SP")
+    items = items.filter((x) => x.own.has(scope.id) || x.via.has(scope.id));
+  else if (scope) {
+    const under = new Set(),
+      walk = (id) => {
+        if (under.has(id)) return;
+        under.add(id);
+        S.all.get(id).children.forEach(walk);
+      };
+    walk(scope.id);
+    items = items.filter((x) => under.has(x.id));
+  }
+  return items.filter((x) => !shelvedOf(x) && finished(x)).map((x) => x.id);
+}
+// Archive these items (Status = Archived), as one change; where says where, for the message.
+export function archive(ids, where) {
+  act(
+    [
+      [
+        "BulkUpdateRecord",
+        CFG.I.table,
+        ids,
+        { [CFG.I.status]: ids.map(() => ARCHIVED) },
+      ],
+    ],
+    `Archived ${ids.length} done item${ids.length === 1 ? "" : "s"}${where}.`,
   );
 }
 
@@ -633,8 +697,11 @@ export function toast(msg) {
 // drops, unlinking (x / Delete), and pasting: see the sprints page.
 export const page = {
   render() {},
-  dropTarget: null, // (event) -> where a drag would land, or null
+  dropTarget: null, // (event) -> where a drag would land if no card can hold it, or null
   drop: null, // (drag, target)
+  // (drag, to) -> [from, extra actions]: for a drop on a card (to), where the dragged note was as
+  // move() sees it (the item it's drawn under, 0: none), and anything else the move changes
+  lift: null,
   unlink: null, // (sel, note element)
   paste: null, // (clip, selected element) -> true if handled
 };

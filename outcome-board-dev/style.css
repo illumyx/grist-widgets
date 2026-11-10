@@ -20,6 +20,7 @@
   --st-progress: #7fd6e3;
   --st-review: #00aec7;
   --st-done: #00587c;
+  --st-dropped: #b8c2cb; /* gray: dropped work isn't on that scale */
   --urgent: #c8102e;
   font-family: "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
   font-size: 14px;
@@ -79,6 +80,27 @@ code {
   background: #fff;
   cursor: pointer;
 }
+/* "Archive done" (view.js archiveButton): its label says where, so a long name is cut short; and the
+   question it asks first */
+#archiveDone {
+  max-width: 22em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.archive-confirm {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.archive-confirm[hidden] {
+  display: none;
+}
+.archive-confirm .danger {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
 .toggle {
   display: flex;
   gap: 4px;
@@ -102,6 +124,8 @@ code {
 }
 .lane {
   flex: 0 0 300px;
+  min-width: 0; /* every list stays 300px wide: what's in it wraps instead */
+  overflow-wrap: anywhere; /* even a long unbroken word, e.g. a file name */
   max-height: 100%;
   display: flex;
   flex-direction: column;
@@ -168,6 +192,49 @@ code {
   color: var(--muted);
   font-size: 12px;
   margin-top: 2px;
+}
+/* the pool's own search box, type chips, and Nested / Flat (view.js poolHTML) */
+.pool-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin-top: 6px;
+  font-size: 12px;
+  font-weight: 400;
+  cursor: default;
+}
+/* the Type menu: a button, and the list of levels it opens (like a spreadsheet's column filter) */
+.check-menu {
+  position: relative;
+}
+.menu-list {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 10px;
+  background: #fff;
+  border: 1px solid #b8c2cb;
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  white-space: nowrap;
+}
+.menu-list label {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  cursor: pointer;
+}
+.pool-tools input[type="search"] {
+  flex-basis: 100%;
+  font: inherit;
+  padding: 3px 6px;
+  border: 1px solid #b8c2cb;
+  border-radius: 3px;
 }
 .lane-body {
   flex: 1;
@@ -358,17 +425,25 @@ code {
 }
 /* Status bar at the left of an item's card, note, or row, and of an outcome list's header (core.js
    statusOf: blank counts as Not Started); a sprint's progress bar stacks the same colors */
-[data-status="Not Started"] {
+/* A shelved status shows the color of where it stopped: Tabled as Not Started, Paused as In
+   Progress, Archived as Done; Dropped is gray. */
+[data-status="Not Started"],
+[data-status="Tabled"] {
   --st: var(--st-not-started);
 }
-[data-status="In Progress"] {
+[data-status="In Progress"],
+[data-status="Paused"] {
   --st: var(--st-progress);
 }
-[data-status="Review"] {
+[data-status="Under Review"] {
   --st: var(--st-review);
 }
-[data-status="Done"] {
+[data-status="Done"],
+[data-status="Archived"] {
   --st: var(--st-done);
+}
+[data-status="Dropped"] {
+  --st: var(--st-dropped);
 }
 .lane-head[data-status],
 .ocard[data-status],

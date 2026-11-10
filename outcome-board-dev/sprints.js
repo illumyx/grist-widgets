@@ -4,7 +4,9 @@
  * item rather than again.
  * Drag from the pool (or another sprint) into a sprint to add (move) an item, or within a sprint to
  * reorder it in its group; x, Delete, or dragging back to the pool takes it out; Ctrl/Cmd+V on a
- * selected sprint adds the copied item. "+ Add item" adds a new item (no parent) to a sprint. */
+ * selected sprint adds the copied item. Cards link the way they do on the outcome board: dropping or
+ * pasting onto one links the item under it, and x, Delete, or dragging to the pool unlinks what's
+ * in one. "+ Add item" adds a new item (no parent) to a sprint. */
 
 import {
   start,
@@ -15,13 +17,13 @@ import {
   render,
   esc,
   rich,
-  nameOf,
   sprintLink,
+  sprintAction,
   unlink,
-  toast,
-  kidsOf,
+  canParent,
   SPRINT_DONE,
   STATUSES,
+  SHELVED,
   DONE,
   statusOf,
   shelvedOf,
@@ -36,31 +38,38 @@ import {
   drawBoard,
   ocardHTML,
   paneIs,
-  visible,
-  matches,
-  hit,
   poolHTML,
   trowHTML,
+  reach,
+  flatHTML,
 } from "./view.js";
+import { visible, matches, hit, forWho, whoPicked, flat } from "./filters.js";
 
-ui.showAll = true; // the pool starts with every item ("Hide linked" unticked)
 let showCompleted = false;
 const X = "Remove from this sprint";
+// the statuses a sprint's progress bar counts (shelved items aren't counted)
+const COUNTED = STATUSES.filter((st) => !SHELVED.includes(st));
 
 function sprintHTML(sp) {
   const k = sp.kids,
-    // progress counts every item in the sprint, on its own or through a parent, that isn't shelved:
-    // parents as well as what's under them, and outcomes too (one is seldom put in a sprint, so when
-    // it is, it means something). Items are counted, not weighted by effort, since few have one; to
-    // weight them again, sum each one's Effort instead of counting it, using only the items with
-    // nothing under them (a parent's Effort is rolled up from its children's).
-    items = ["O", "C", "D", "T"].flatMap((type) =>
+    // progress counts the leaves in the sprint, on their own or through a parent, that aren't
+    // shelved: the items with nothing under them, or nothing but shelved items (a parent's work is
+    // what's under it, so counting it too would count that work twice). An outcome with nothing
+    // under it counts too. When the person menu picks someone, only their work counts (see
+    // ownersOf). Items are counted, not weighted by effort, since few have one; to weight them
+    // again, sum each one's Effort instead of counting it.
+    leaves = ["O", "C", "D", "T"].flatMap((type) =>
       [...S[type].values()].filter(
-        (x) => (x.own.has(sp.id) || x.via.has(sp.id)) && !shelvedOf(x),
+        (x) =>
+          (x.own.has(sp.id) || x.via.has(sp.id)) &&
+          !shelvedOf(x) &&
+          x.children.every((id) => shelvedOf(S.all.get(id))) &&
+          forWho(x),
       ),
     ),
-    counts = STATUSES.map(
-      (st) => items.filter((x) => statusOf(x) === st).length,
+    who = whoPicked(),
+    counts = COUNTED.map(
+      (st) => leaves.filter((x) => statusOf(x) === st).length,
     ),
     dates = [sp.row[CFG.SP.start], sp.row[CFG.SP.end]]
       .filter(Boolean)
@@ -69,28 +78,37 @@ function sprintHTML(sp) {
     dels = k.D.map((id) => S.D.get(id))
       .filter(visible)
       .filter(hit),
-    body =
-      k.O.map((id) => S.O.get(id))
-        .filter(visible)
-        .map((o) => ocardHTML(o, sp.id, X))
-        .join("") +
-      k.C.map((id) => capHTML(S.C.get(id), sp.id, X)).join("") +
-      (dels.length
-        ? `<div class="dels">${dels.map((d) => delHTML(d, sp.id, X)).join("")}</div>`
-        : "") +
-      k.T.map((id) => S.T.get(id))
-        .filter(visible)
-        .filter(matches)
-        .map((t) => trowHTML(t, sp.id, X))
-        .join("");
+    body = flat()
+      ? flatHTML(
+          reach(
+            ["O", "C", "D", "T"].flatMap((type) => k[type]),
+            sp.id,
+          ).filter(([x]) => x.own.has(sp.id) || x.via.has(sp.id)),
+          X,
+        )
+      : k.O.map((id) => S.O.get(id))
+          .filter(visible)
+          .map((o) => ocardHTML(o, sp.id, X))
+          .join("") +
+        k.C.map((id) => capHTML(S.C.get(id), sp.id, X)).join("") +
+        (dels.length
+          ? `<div class="dels">${dels.map((d) => delHTML(d, sp.id, X)).join("")}</div>`
+          : "") +
+        k.T.map((id) => S.T.get(id))
+          .filter(visible)
+          .filter(matches)
+          .map((t) => trowHTML(t, sp.id, X))
+          .join("");
   // a bar stacked by status, from done to not started (so it fills from the left as items are
   // done), then the share that's done
-  const total = items.length,
-    pct = Math.round((100 * counts[STATUSES.indexOf(DONE)]) / total),
-    stack = STATUSES.map((st, i) => [st, counts[i]]).reverse(),
-    tip = stack.map(([st, n]) => `${st}: ${n}`).join(", "),
+  const total = leaves.length,
+    pct = Math.round((100 * counts[COUNTED.indexOf(DONE)]) / total),
+    stack = COUNTED.map((st, i) => [st, counts[i]]).reverse(),
+    tip =
+      (who ? `${who}: ` : "") +
+      stack.map(([st, n]) => `${st}: ${n}`).join(", "),
     progress = total
-      ? `<span class="progress" title="${tip}" aria-label="${tip}"><span class="bar">${stack
+      ? `<span class="progress" title="${esc(tip)}" aria-label="${esc(tip)}">${who ? `<span class="who">${esc(who)}</span>` : ""}<span class="bar">${stack
           .map(([st, n]) =>
             n
               ? `<span data-status="${esc(st)}" style="width:${(100 * n) / total}%"></span>`
@@ -109,12 +127,8 @@ page.render = () =>
     S.hasSprints
       ? poolHTML(
           "Drag notes here to take them out of a sprint",
-          ` <label class="toggle"><input type="checkbox" data-hideplanned${ui.hidePlanned ? " checked" : ""}> Hide planned</label>`,
-          kidsOf("O", 0)
-            .map((id) => S.O.get(id))
-            .filter(visible)
-            .map((o) => ocardHTML(o, 0))
-            .join(""),
+          ["O", "C", "D", "T"],
+          `<label class="toggle"><input type="checkbox" data-hideplanned${ui.pool.hidePlanned ? " checked" : ""}> Hide planned</label>`,
         ) +
           [...S.SP.values()]
             .filter((sp) => showCompleted || sp.status !== SPRINT_DONE)
@@ -129,7 +143,19 @@ const sprintOf = (el) => {
   const lane = el?.closest(".lane.sprint");
   return lane ? +$(".lane-head", lane).dataset.id : 0;
 };
-const directlyIn = (sid, type, id) => !!S.SP.get(sid)?.kids[type].includes(id);
+// a note drawn inside a card on the page (its data-parent is that card's item), not at the top of a
+// sprint (its data-parent is the sprint) or the pool
+const nested = (el) => !!el.parentElement.closest("#board [data-type]");
+// a note at the top of a sprint: an item directly in that sprint (in a flat list, only those are;
+// the others are there through a parent)
+const atTop = (el) => {
+  const sid = sprintOf(el);
+  return (
+    !!sid &&
+    !nested(el) &&
+    !!S.SP.get(sid).kids[el.dataset.type]?.includes(+el.dataset.id)
+  );
+};
 
 // a sprint list's notes of one level, in order (its own items, not ones inside a capability)
 const GROUP = {
@@ -160,32 +186,56 @@ page.dropTarget = (e) => {
     ref: before || last.nextSibling,
   };
 };
+// A drop in a sprint or the pool (a card that can hold the note takes it instead: see page.lift).
+// Into a sprint adds the item to it, its links unchanged (from the top of another sprint, it moves).
+// Into the pool takes it out of the sprint whose top it was at, or else unlinks it from the card (or
+// side pane) it was in, as on the outcome board.
 page.drop = (d, t) => {
   const from = sprintOf(d.el),
-    direct = directlyIn(from, d.type, d.id);
-  if (t.sprint === from) {
-    // reorder within the sprint (inherited items have no place of their own to move)
-    if (direct) sprintLink(from, d.type, d.id, true, { before: t.before });
+    top = atTop(d.el);
+  if (t.sprint && t.sprint === from) {
+    // reorder within the sprint (what's in it through a parent has no place of its own to move)
+    if (top) sprintLink(from, d.type, d.id, true, { before: t.before });
   } else if (t.sprint)
     sprintLink(t.sprint, d.type, d.id, true, {
-      from: direct ? from : undefined,
+      from: top ? from : undefined,
       before: t.before,
     });
-  else if (direct) sprintLink(from, d.type, d.id, false); // back to the pool
+  else if (top) sprintLink(from, d.type, d.id, false);
+  else unlink(d.type, d.id, d.parent); // (nothing to do from the top of the pool)
 };
-page.unlink = (s, note) => {
-  const sid = sprintOf(note);
-  if (!sid) return unlink(s.type, s.id, s.parent); // e.g. a task in the side pane
-  if (directlyIn(sid, s.type, s.id))
-    return sprintLink(sid, s.type, s.id, false);
-  toast(
-    `“${nameOf(s.id)}” is in “${S.SP.get(sid).name}” through a parent; take that out instead.`,
-  );
+// A drop on a card links the note under it, as on the outcome board. From the top of a sprint it's
+// a new link (it was under no item there), and if the card is in that same sprint, it leaves the top
+// (it's in the sprint through the card now); its other sprints don't change.
+page.lift = (d, to) => {
+  if (!atTop(d.el)) return [d.parent, []];
+  const sid = sprintOf(d.el),
+    card = S.all.get(to);
+  return [
+    0,
+    card.own.has(sid) || card.via.has(sid)
+      ? [sprintAction(sid, d.id, false)]
+      : [],
+  ];
 };
+// x or Delete: in a card (or the side pane), unlinks it from that card, as on the outcome board; at
+// the top of a sprint, takes it out of the sprint
+page.unlink = (s, note) =>
+  atTop(note)
+    ? sprintLink(sprintOf(note), s.type, s.id, false)
+    : unlink(s.type, s.id, s.parent);
+// Ctrl/Cmd+V: a selected card that can hold the copied item (or a note of its level inside a card)
+// links it there, as on the outcome board; anything else selected in a sprint adds it to the sprint.
 page.paste = (clip, el) => {
   const sid = sprintOf(el);
-  if (sid) sprintLink(sid, clip.type, clip.id, true);
-  return !!sid;
+  if (
+    !sid ||
+    canParent(el.dataset.type, clip.type) ||
+    (nested(el) && el.dataset.type === clip.type)
+  )
+    return false;
+  sprintLink(sid, clip.type, clip.id, true);
+  return true;
 };
 
 $("#showCompleted").addEventListener("change", (e) => {

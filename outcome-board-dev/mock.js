@@ -7,7 +7,7 @@
     ["Items", "Children", "Items", "Parents"],
     ["Sprints", "Items", "Items", "Sprints"],
   ];
-  // ids: outcome 1, capabilities 2-4, deliverables 5-7, tasks 8-11 (4 is archived, 11 tabled)
+  // ids: outcome 1, capabilities 2-4, deliverables 5-7, tasks 8-11 (4 is dropped, 11 tabled)
   const db = window.LINKBOARD_DATA || {
     Items: [
       {
@@ -35,7 +35,7 @@
         Type: "Capability",
         Item: "The team is alerted to production errors",
         Children: [],
-        Shelved: "Archived",
+        Status: "Dropped",
       },
       {
         id: 5,
@@ -81,8 +81,7 @@
         id: 11,
         Type: "Task",
         Item: "Preview on mobile",
-        Status: "Not Started",
-        Shelved: "Tabled",
+        Status: "Tabled",
       },
     ],
     // Start/End are Grist dates: seconds since 1970 (UTC midnight)

@@ -1,4 +1,4 @@
-/* In-browser tests for the boards -- dragging notes, shelved (tabled or archived) items, the
+/* In-browser tests for the boards -- dragging notes, statuses and shelved items (the Status menu), the
  * collapsible pool, who items can be assigned to, who's on what's under them, the person menu,
  * tasks' side panes, changing an item's level, tasks in deliverables, and outcomes on the sprints
  * page -- run
@@ -7,7 +7,8 @@
  * http://localhost:8000/sprints.html?test -- the results show at the top of the page. The tests
  * change the demo data, so reload to run them again. */
 
-import { S, ui, sprintLink, ekey, render } from "./core.js";
+import { S, ui, sprintLink, ekey, render, act } from "./core.js";
+import { ownersOf, menus, unhidden } from "./filters.js";
 
 const $ = (s) => document.querySelector(s);
 const settle = () => new Promise((r) => setTimeout(r, 50)); // let a change save and redraw
@@ -86,6 +87,82 @@ const showFor = (label) =>
     $("#who"),
     [...$("#who").options].find((o) => o.text === label).value,
   );
+// type text into the pool's search box, as if typed there
+async function poolSearch(text) {
+  const box = $("[data-poolq]");
+  box.focus();
+  box.value = text;
+  box.dispatchEvent(new Event("input", { bubbles: true }));
+  await settle();
+}
+// the pool's notes at its top (not the ones inside cards), e.g. "O1,C4"
+const poolTop = () =>
+  [
+    ...$("#board .lane.unlinked .lane-body").querySelectorAll(
+      ":scope > [data-type], :scope > .dels > [data-type], :scope > .trows > [data-type]",
+    ),
+  ]
+    .map((n) => n.dataset.type + n.dataset.id)
+    .join();
+// click the pool's Nested or Flat ("nested", "flat")
+async function poolChip(value) {
+  $(`#board .lane.unlinked [data-poolview="${value}"]`).click();
+  await settle();
+}
+// tick or untick a value ("C"; "all": (Select all)) in a filter menu ("type": the pool's Type menu,
+// "status": the toolbar's Status menu), opening it first
+async function menuTick(key, value) {
+  if (!menus[key].open) {
+    $(`[data-menu="${key}"]`).click();
+    await settle();
+  }
+  $(
+    value === "all"
+      ? `[data-tick="${key}"][data-all]`
+      : `[data-tick="${key}"][value="${value}"]`,
+  ).click();
+  await settle();
+}
+const poolType = (value) => menuTick("type", value);
+const SHELVED = ["Dropped", "Tabled", "Paused", "Archived"],
+  ACTIVE = ["Not Started", "In Progress", "Under Review", "Done"];
+// set the toolbar's Status menu to show just these statuses (then close it)
+async function showStatuses(...statuses) {
+  for (const [st] of menus.status.values)
+    if (menus.status.hidden.has(st) === statuses.includes(st))
+      await menuTick("status", st);
+  if (menus.status.open) $('[data-menu="status"]').click();
+  await settle();
+}
+// the notes at the top of a list (the list whose header is the one with type and id), not those
+// inside cards, e.g. "C2,D5,T10"
+const listTop = (type, id) =>
+  [
+    ...$(`#board .lane-head[data-type="${type}"][data-id="${id}"]`)
+      .parentElement.querySelector(".lane-body")
+      .querySelectorAll(
+        ":scope > [data-type], :scope > .dels > [data-type], :scope > .trows > [data-type]",
+      ),
+  ]
+    .map((n) => n.dataset.type + n.dataset.id)
+    .join();
+// the toolbar's Nested or Flat ("nested", "flat")
+async function listView(value) {
+  $(`[data-listview="${value}"]`).click();
+  await settle();
+}
+// Ctrl+key on the selected note (Ctrl+C copies it, Ctrl+V pastes)
+const pressCtrl = (key) =>
+  $("#board .selected").dispatchEvent(
+    new KeyboardEvent("keydown", { key, ctrlKey: true, bubbles: true }),
+  );
+// set an item's status from its side pane, which stays open
+async function setStatus(id, status) {
+  ui.pane = { type: S.all.get(id).type, id };
+  render();
+  choose("Status", status);
+  await settle();
+}
 
 const results = [];
 function check(name, ok) {
@@ -97,6 +174,7 @@ async function run() {
   if (document.body.classList.contains("sprints-page")) return sprintsTests();
   openCaps();
   await settle();
+  await flatListTests();
   await dragTests();
   await shelvedTests();
   await poolTests();
@@ -180,14 +258,59 @@ async function dragTests() {
   pointer("pointerup", eff[0] + 30, eff[1], 0);
 }
 
+// Outcome board, at the start: outcome 1 holds capabilities 2 and 3; 2 holds deliverable 5, and 3
+// holds 5 and 6; 5 has tasks 8 (done, DR's), 9, and 11 (tabled), and 6 has task 10.
+async function flatListTests() {
+  const lane = () => $('#board .lane-head[data-id="1"]').parentElement,
+    search = async (text) => {
+      $("#search").value = text;
+      $("#search").dispatchEvent(new Event("input"));
+      await settle();
+    };
+  await listView("flat");
+  check(
+    "flat, an outcome list shows everything under it that the filters let through, once each",
+    listTop("O", 1) === "C2,C3,D5,D6,T8,T9,T10",
+  );
+  check(
+    "... each on its own, with no arrow",
+    !lane().querySelector(".lane-body [data-type] [data-type]") &&
+      !lane().querySelector("[data-toggle]"),
+  );
+  const t10 = lane().querySelector('.trow[data-id="10"]');
+  check(
+    "... and under the parent it's linked through (task 10: deliverable 6)",
+    t10.dataset.parent === "6" &&
+      t10.querySelector(".x").title === "Remove from this deliverable",
+  );
+  await search("page");
+  check(
+    "... the filter shows just the items that match (deliverable 5, task 9)",
+    listTop("O", 1) === "D5,T9",
+  );
+  await search("");
+  showFor("DR");
+  await settle();
+  check("... and so does the person menu (task 8)", listTop("O", 1) === "T8");
+  showFor("Anyone");
+  await listView("nested");
+  check(
+    "Nested goes back: the capability cards, with what's under them",
+    listTop("O", 1) === "C2,C3" && !!lane().querySelector("[data-toggle]"),
+  );
+}
+
 // Outcome board, after dragTests (deliverable 6 is now on capability 2). Demo data: capability 4 is
-// archived; deliverable 5 has tasks 8 (done), 9, and 11 (tabled); deliverable 6 is in Sprint 3, so
+// dropped; deliverable 5 has tasks 8 (done), 9, and 11 (tabled); deliverable 6 is in Sprint 3, so
 // its task 10 is too; deliverable 7 is overdue.
 async function shelvedTests() {
-  const hide = $("#hideShelved"),
-    shown = (sel) => !!$(`#board ${sel}`);
-  check("Hide shelved starts ticked", hide.checked);
-  check("an archived capability is hidden", !shown('.cap[data-id="4"]'));
+  const shown = (sel) => !!$(`#board ${sel}`);
+  check(
+    "the Status menu starts with the shelved statuses unticked",
+    SHELVED.every((st) => menus.status.hidden.has(st)) &&
+      ACTIVE.every((st) => !menus.status.hidden.has(st)),
+  );
+  check("a dropped capability is hidden", !shown('.cap[data-id="4"]'));
   del(2, 5).click();
   await settle();
   check(
@@ -199,43 +322,61 @@ async function shelvedTests() {
     del(2, 5).querySelector(".meta").textContent.includes("1/2 tasks"),
   );
 
-  hide.click(); // untick it
-  await settle();
+  await showStatuses(...SHELVED, ...ACTIVE);
   const cap4 = $('#board .cap[data-id="4"]');
   check(
-    "unticked, shelved items show, faded and tagged",
+    "ticked, shelved items show, faded and tagged with their status",
     cap4?.classList.contains("shelved") &&
-      cap4.querySelector(".shelf")?.textContent === "Archived" &&
+      cap4.querySelector(".shelf")?.textContent === "Dropped" &&
       $('#pane .task[data-id="11"] .shelf')?.textContent === "Tabled",
   );
-  hide.click(); // tick it again
-  await settle();
+  await showStatuses(...ACTIVE);
 
-  // shelving deliverable 6 from its side pane, then un-shelving it
+  // tabling deliverable 6 from its side pane, then taking it up again
   del(2, 6).click();
   await settle();
-  const menu = $('#pane select[data-field="Shelved"]');
+  const menu = $('#pane select[data-field="Status"]');
   check(
-    "the side pane has a Shelved menu: No, Tabled, Archived",
-    [...menu.options].map((o) => o.text).join() === "No,Tabled,Archived" &&
-      menu.value === "",
+    "the side pane's Status menu has every status, in order",
+    [...menu.options].map((o) => o.text).join() ===
+      "Dropped,Tabled,Not Started,In Progress,Paused,Under Review,Done,Archived" &&
+      menu.value === "Not Started",
   );
   const before = S.T.get(10).via.has(3);
-  choose("Shelved", "Tabled");
+  choose("Status", "Tabled");
   await settle();
   check(
-    "shelving it from the side pane saves it and hides it",
-    S.D.get(6).row.Shelved === "Tabled" && !del(2, 6),
+    "tabling it from the side pane saves it and hides it",
+    S.D.get(6).row.Status === "Tabled" && !del(2, 6),
   );
   check(
     "a shelved item doesn't bring what's under it into its sprint",
     before && !S.T.get(10).via.has(3),
   );
-  choose("Shelved", "");
+  check(
+    "what's only under a tabled item is filtered as tabled too (task 10)",
+    !unhidden(S.T.get(10)),
+  );
+  await showStatuses("Tabled");
+  check(
+    "with only Tabled ticked, the tabled items show, in the cards they're in (as context)",
+    !!del(2, 6) &&
+      !!del(3, 5)?.querySelector('.trow[data-id="11"]') &&
+      !del(3, 5).querySelector('.trow[data-id="9"]') &&
+      unhidden(S.T.get(10)),
+  );
+  check(
+    "... and the menu's button says what's ticked",
+    $('[data-menu="status"]').textContent.includes("Status: Tabled"),
+  );
+  await showStatuses(...ACTIVE);
+  choose("Status", "Not Started");
   await settle();
   check(
-    "choosing No un-shelves it",
-    !S.D.get(6).row.Shelved && !!del(2, 6) && S.T.get(10).via.has(3),
+    "choosing Not Started takes it up again",
+    S.D.get(6).row.Status === "Not Started" &&
+      !!del(2, 6) &&
+      S.T.get(10).via.has(3),
   );
 
   // an overdue item that's shelved isn't shown as late
@@ -243,15 +384,14 @@ async function shelvedTests() {
   check("an overdue item shows as late", late());
   $('#board .del[data-id="7"]').click();
   await settle();
-  hide.click(); // untick, to see it once it's shelved
-  choose("Shelved", "Archived");
+  await showStatuses(...SHELVED, ...ACTIVE); // to see it once it's dropped
+  choose("Status", "Dropped");
   await settle();
   check(
     "... but not once it's shelved",
     shown('.del[data-id="7"].shelved') && !late(),
   );
-  hide.click();
-  await settle();
+  await showStatuses(...ACTIVE);
 }
 
 // Outcome board, after shelvedTests: deliverable 5 is on capabilities 2 and 3.
@@ -272,6 +412,16 @@ async function poolTests() {
     "clicking the strip opens the pool",
     !strip() && !!$("#board .lane.unlinked .lane-body"),
   );
+  $('[data-menu="type"]').click();
+  await settle();
+  check(
+    "the pool's Type menu here lists capability, deliverable, and task",
+    [...document.querySelectorAll('[data-tick="type"]')]
+      .map((b) => (b.hasAttribute("data-all") ? "all" : b.value))
+      .join() === "all,C,D,T",
+  );
+  $('[data-menu="type"]').click();
+  await settle();
 }
 
 // Outcome board, after poolTests: deliverable 6 is on capability 2, with task 10. The demo's
@@ -315,14 +465,12 @@ async function inheritedTests() {
     "... up to the outcome",
     who($('#board .lane-head[data-id="1"]')) === "~SU,~MK,~DR",
   );
-  $("#hideDone").click();
-  await settle();
+  await showStatuses("Not Started", "In Progress", "Under Review");
   check(
     "the people on hidden (done) items aren't counted",
     who(del(3, 5)) === "MK" && who(cap(3)) === "~MK",
   );
-  $("#hideDone").click();
-  await settle();
+  await showStatuses(...ACTIVE);
 }
 
 // Outcome board, after inheritedTests (see there). Deliverable 5 also has task 9, and deliverable
@@ -342,10 +490,9 @@ async function whoFilterTests() {
   showFor("DR");
   await settle();
   check("... which can be further down (task 8, done)", !!del(3, 5) && !cap(2));
-  $("#hideDone").click();
-  await settle();
+  await showStatuses("Not Started", "In Progress", "Under Review");
   check("... unless it's hidden", !$('#board .lane-head[data-id="1"]'));
-  $("#hideDone").click();
+  await showStatuses(...ACTIVE);
   showFor("Unassigned");
   await settle();
   check(
@@ -388,11 +535,11 @@ async function taskPaneTests() {
     "clicking a checklist task's name opens its own side pane",
     ui.pane?.type === "T" &&
       ui.pane.id === 9 &&
-      !!$('#pane select[data-field="Shelved"]'),
+      !!$('#pane select[data-field="Status"]'),
   );
-  choose("Shelved", "Tabled");
+  choose("Status", "Tabled");
   await settle();
-  check("... where it can be shelved", S.T.get(9).row.Shelved === "Tabled");
+  check("... where it can be tabled", S.T.get(9).row.Status === "Tabled");
   $('#pane .chip [data-open="5"]').click();
   await settle();
   check(
@@ -485,7 +632,7 @@ async function delTasksTests() {
   check("Space opens a deliverable too", !!row(3, 5, 10));
 
   // with the filter matching task 10 and not the deliverable, it opens by itself to just that task
-  $("#hideShelved").click(); // untick it, to show tabled task 9
+  await showStatuses(...SHELVED, ...ACTIVE); // to show tabled task 9
   $("#collapseAll").click();
   const search = $("#search");
   search.value = "draft";
@@ -497,8 +644,7 @@ async function delTasksTests() {
   );
   search.value = "";
   search.dispatchEvent(new Event("input"));
-  $("#hideShelved").click();
-  await settle();
+  await showStatuses(...ACTIVE);
 
   $("#collapseAll").click();
   $("#expandAll").click();
@@ -509,29 +655,94 @@ async function delTasksTests() {
   );
 }
 
-// Sprints page. Demo data: capability 4 (archived) is in the pool; Sprint 2 holds capability 2, so
+// Sprints page. Demo data: capability 4 (dropped) is in the pool; Sprint 2 holds capability 2, so
 // also its deliverable 5 and 5's tasks 8 (done), 9, and 11 (tabled); and task 10.
 async function sprintsTests() {
+  // flat: Sprint 2 holds capability 2 (so deliverable 5 and its tasks) and task 10; done task 8 and
+  // tabled task 11 are hidden
+  await listView("flat");
+  const t9 = $('#board .lane.sprint .trow[data-id="9"]'),
+    t10 = $('#board .lane.sprint .trow[data-id="10"]');
+  check(
+    "flat, a sprint shows what's in it, directly or through a parent, once each",
+    listTop("SP", 2) === "C2,D5,T10,T9",
+  );
+  check(
+    "... its own items' x takes them out of the sprint, the others' out of their parent",
+    t10.dataset.parent === "2" &&
+      t10.querySelector(".x").title === "Remove from this sprint" &&
+      t9.dataset.parent === "5" &&
+      t9.querySelector(".x").title === "Remove from this deliverable",
+  );
+  await listView("nested");
+  check("Nested goes back", listTop("SP", 2) === "C2,T10");
   const pool = (sel) => !!$(`#board .lane.unlinked ${sel}`),
     progress = (sid) =>
-      $(`#board .lane-head[data-id="${sid}"] .progress`)?.textContent;
+      $(`#board .lane-head[data-id="${sid}"] .progress`)?.textContent,
+    // a sprint's progress bar, by status: "Done 33%, Not Started 67%" (widths rounded)
+    bar = (sid) =>
+      [...$(`#board .lane-head[data-id="${sid}"] .progress .bar`).children]
+        .map(
+          (s) =>
+            `${s.dataset.status} ${Math.round(parseFloat(s.style.width))}%`,
+        )
+        .join(", ");
   check(
-    "a sprint's progress counts its items and what's under them, leaving out shelved ones (task 8 of 2, 5, 8, 9, 10 done)",
-    progress(2) === "20%",
+    "a sprint's progress counts its leaves, on their own or through a parent, leaving out shelved ones (task 8 of 8, 9, 10 done)",
+    progress(2) === "33%",
   );
   check(
     "... stacked by status, done first: a blank one counts as Not Started",
-    [...$('#board .lane-head[data-id="2"] .progress .bar').children]
-      .map((s) => `${s.dataset.status} ${s.style.width}`)
-      .join(", ") === "Done 20%, In Progress 20%, Not Started 60%",
+    bar(2) === "Done 33%, Not Started 67%",
   );
+  // whose work: task 8 is DR's; task 9 has nobody, so it's MK's, like its deliverable 5; task 10
+  // has nobody, nor does anything above it
+  const owners = (id) => [...ownersOf(S.T.get(id))].join();
   check(
-    "Hide shelved starts ticked, hiding an archived capability",
-    $("#hideShelved").checked && !pool('.cap[data-id="4"]'),
+    "an item is the work of its assignees, else of its nearest parents' that have some",
+    owners(8) === "DR" && owners(9) === "MK" && owners(10) === "",
   );
-  $("#hideShelved").click();
+  const whoOnBar = (sid) =>
+    $(`#board .lane-head[data-id="${sid}"] .progress .who`)?.textContent;
+  showFor("MK");
   await settle();
-  check("unticked, it shows, faded", pool('.cap[data-id="4"].shelved'));
+  check(
+    "picking a person, a sprint's bar counts just their work, and says whose (task 9)",
+    bar(2) === "Not Started 100%" && whoOnBar(2) === "MK",
+  );
+  showFor("DR");
+  await settle();
+  check("... (task 8)", bar(2) === "Done 100%" && whoOnBar(2) === "DR");
+  showFor("Unassigned");
+  await settle();
+  check(
+    "... Unassigned, the work that's nobody's (task 10)",
+    bar(2) === "Not Started 100%" && whoOnBar(2) === "Unassigned",
+  );
+  showFor("Anyone");
+  await settle();
+  check(
+    "... and Anyone, everyone's again",
+    bar(2) === "Done 33%, Not Started 67%" && !whoOnBar(2),
+  );
+  // with tasks 8 and 9 archived (and 11 tabled), deliverable 5 has nothing unshelved under it
+  await setStatus(8, "Archived");
+  await setStatus(9, "Archived");
+  check(
+    "an item with only shelved items under it counts as a leaf (5, in progress, and 10)",
+    bar(2) === "In Progress 50%, Not Started 50%",
+  );
+  await setStatus(8, "Done");
+  await setStatus(9, "Not Started");
+  $("#pane [data-close]").click();
+  await settle();
+  check(
+    "here the Status menu starts with Done unticked too, and the shelved statuses, hiding a dropped capability",
+    [...SHELVED, "Done"].every((st) => menus.status.hidden.has(st)) &&
+      !pool('.cap[data-id="4"]'),
+  );
+  await showStatuses(...SHELVED, "Not Started", "In Progress", "Under Review");
+  check("ticked, it shows, faded", pool('.cap[data-id="4"].shelved'));
 
   // a task row opens the task's side pane (not its parent's)
   $('#board .lane.sprint .trow[data-id="10"]').click();
@@ -556,8 +767,8 @@ async function sprintsTests() {
   sprintLink(3, "O", 1, true);
   await settle();
   check(
-    "an outcome in a sprint counts in its progress (task 8 of 1, 2, 3, 5, 6, 8, 9, 10 done)",
-    progress(3) === "13%",
+    "an outcome in a sprint brings its leaves into its progress (task 8 of 8, 9, 10 done)",
+    progress(3) === "33%",
   );
   check(
     "an outcome card in a sprint shows the people under it",
@@ -601,14 +812,29 @@ async function sprintsTests() {
     !!card().querySelector('.cap[data-id="2"]') &&
       !!card().querySelector('.cap[data-id="3"]'),
   );
+  await poolSearch("build a survey");
+  check(
+    "the pool's search opens an outcome card to just what matches under it",
+    !!inPool()?.querySelector('.cap[data-id="2"]') &&
+      !inPool().querySelector('.cap[data-id="3"]'),
+  );
+  check(
+    "... and typing in it keeps the focus in it",
+    document.activeElement === $("[data-poolq]") &&
+      $("[data-poolq]").value === "build a survey",
+  );
+  await poolSearch("");
+  $("[data-poolq]").blur();
   const search = $("#search");
   search.value = "build a survey";
   search.dispatchEvent(new Event("input"));
   await settle();
   check(
-    "a filter opens an outcome card to just what matches under it",
-    !!inPool()?.querySelector('.cap[data-id="2"]') &&
-      !inPool().querySelector('.cap[data-id="3"]'),
+    "the toolbar's search filters the sprints, not the pool",
+    !!card().querySelector('.cap[data-id="2"]') &&
+      !card().querySelector('.cap[data-id="3"]') &&
+      !!inPool() &&
+      !inPool().querySelector(".cap"),
   );
   search.value = "";
   search.dispatchEvent(new Event("input"));
@@ -622,6 +848,222 @@ async function sprintsTests() {
     !!card()?.querySelector(
       '.cap[data-id="3"] .del[data-id="6"] .trow[data-id="10"]',
     ),
+  );
+
+  // Cards link the way they do on the outcome board. Sprint 2 holds capability 2 and outcome 1;
+  // Sprint 3, deliverable 6 and outcome 1. Deliverable 7 is in no sprint and under nothing.
+  const inLane = (sid, sel) =>
+      // the first note matching sel in sprint sid's list
+      $(
+        `#board .lane-head[data-type="SP"][data-id="${sid}"]`,
+      ).parentElement.querySelector(sel),
+    // open a card with its arrow
+    expand = async (el) => {
+      el.querySelector("[data-toggle]").click();
+      await settle();
+    };
+  $("#collapseAll").click(); // (so the pool fits on the page)
+  await settle();
+  dragTo(
+    $('#board .lane.unlinked .del[data-id="7"]'),
+    inLane(2, '.cap[data-id="2"]'),
+  );
+  await settle();
+  check(
+    "dropping a note onto a card in a sprint links it there (so it's in the sprint through the card)",
+    S.C.get(2).kids.D.includes(7) &&
+      S.D.get(7).via.has(2) &&
+      !S.SP.get(2).items.includes(7),
+  );
+  await expand($('#board .lane.unlinked .ocard[data-id="1"]'));
+  await expand($('#board .lane.unlinked .cap[data-id="2"]'));
+  dragTo(
+    $('#board .lane.unlinked .cap[data-id="2"] .del[data-id="7"]'),
+    inLane(3, ".lane-head"),
+  );
+  await settle();
+  check(
+    "dragged out of a card into a sprint, it's added to the sprint and keeps its link",
+    S.SP.get(3).items.includes(7) && S.C.get(2).kids.D.includes(7),
+  );
+  await expand(inLane(2, '.cap[data-id="2"]'));
+  inLane(2, '.cap[data-id="2"] .del[data-id="7"] > .x').click();
+  await settle();
+  check(
+    "x on a note in a card unlinks it from the card, as on the outcome board",
+    !S.C.get(2).kids.D.includes(7) && S.SP.get(3).items.includes(7),
+  );
+  dragTo(inLane(3, '.del[data-id="6"]'), inLane(3, '.ocard[data-id="1"]'));
+  await settle();
+  check(
+    "dragged from the top of a sprint onto a card in it, it's linked there and leaves the top",
+    S.O.get(1).kids.D.includes(6) &&
+      S.C.get(3).kids.D.includes(6) &&
+      !S.SP.get(3).items.includes(6) &&
+      S.D.get(6).via.has(3),
+  );
+  await expand(inLane(3, '.ocard[data-id="1"]'));
+  dragTo(
+    inLane(3, '.ocard[data-id="1"] .del[data-id="6"][data-parent="1"]'),
+    $("#board .lane.unlinked .lane-head"),
+  );
+  await settle();
+  check(
+    "dragged from a card to the pool, it's unlinked from that card",
+    !S.O.get(1).kids.D.includes(6) && S.C.get(3).kids.D.includes(6),
+  );
+
+  // copy deliverable 7 (at the top of Sprint 3), then paste it onto capability 2 in Sprint 2, then
+  // onto Sprint 2
+  inLane(3, '.del[data-id="7"]').click();
+  await settle();
+  pressCtrl("c");
+  inLane(2, ':scope > .lane-body > .cap[data-id="2"]').click();
+  await settle();
+  pressCtrl("v");
+  await settle();
+  check(
+    "pasting onto a card in a sprint links it there, and takes it out of nothing",
+    S.C.get(2).kids.D.includes(7) && S.SP.get(3).items.includes(7),
+  );
+  inLane(2, ".lane-head").click();
+  await settle();
+  pressCtrl("v");
+  await settle();
+  check(
+    "pasting with a sprint selected adds it to the sprint",
+    S.SP.get(2).items.includes(7),
+  );
+
+  // The pool. Outcome 1 holds capabilities 2 and 3, which hold deliverables 5, 6, and 7 and their
+  // tasks; capability 4 is under nothing. (The Status menu has Done unticked, so task 8 is hidden,
+  // and the shelved statuses ticked, so dropped capability 4 and tabled task 11 show.)
+  check(
+    "nested, the pool's top has only what's under nothing",
+    poolTop() === "O1,C4",
+  );
+  showFor("DR");
+  await settle();
+  check("... and the person menu doesn't filter it", poolTop() === "O1,C4");
+  showFor("Anyone");
+  await poolChip("flat");
+  check(
+    "flat, it has every item once: outcomes, capabilities, deliverables, then tasks",
+    poolTop() === "O1,C2,C3,C4,D5,D6,D7,T9,T10,T11",
+  );
+  check(
+    "... each on its own, with no arrow to open it",
+    !$("#board .lane.unlinked .lane-body [data-type] [data-type]") &&
+      !$("#board .lane.unlinked [data-toggle]"),
+  );
+  const typeButton = () => $('[data-menu="type"]').textContent,
+    typeList = () => $('.check-menu[data-key="type"] .menu-list');
+  await poolType("all");
+  check(
+    "unticking (Select all) in the Type menu shows nothing",
+    poolTop() === "" && typeButton().includes("None"),
+  );
+  await poolType("D");
+  check("ticking a level shows just that level", poolTop() === "D5,D6,D7");
+  await poolType("T");
+  check(
+    "... two, both, and the button says which",
+    poolTop() === "D5,D6,D7,T9,T10,T11" &&
+      typeButton().includes("Deliverable, Task"),
+  );
+  inLane(3, ".lane-head").click();
+  await settle();
+  check(
+    "a click elsewhere closes the Type menu, and still does what it clicked",
+    !typeList() && ui.pane?.type === "SP" && ui.pane.id === 3,
+  );
+  await poolType("all");
+  check(
+    "ticking (Select all) shows every level again",
+    poolTop() === "O1,C2,C3,C4,D5,D6,D7,T9,T10,T11" &&
+      typeButton().includes("All"),
+  );
+  $('[data-menu="type"]').dispatchEvent(
+    new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+  );
+  check(
+    "Esc closes the Type menu (and leaves the side pane open)",
+    !typeList() && !menus.type.open && ui.pane?.id === 3,
+  );
+  await poolSearch("survey");
+  check(
+    "flat, the pool's search shows just the items that match",
+    poolTop() === "O1,C2,D5",
+  );
+  await poolSearch("");
+  $("[data-poolq]").blur();
+  $("[data-hideplanned]").click();
+  await settle();
+  check(
+    "Hide planned leaves out what's in a planned or active sprint, directly or through a parent",
+    poolTop() === "C4",
+  );
+  $("[data-hideplanned]").click();
+  await poolChip("nested");
+  check("Nested goes back", poolTop() === "O1,C4");
+
+  // Archive done. Deliverables 6 and 7 are done too now; 6 has task 10 under it, not done. Sprint 3
+  // holds outcome 1, so everything under it.
+  await act([
+    ["BulkUpdateRecord", "Items", [6, 7], { Status: ["Done", "Done"] }],
+  ]);
+  const archiveLabel = () => $("#archiveDone").textContent,
+    archived = (id) => S.all.get(id).row.Status === "Archived",
+    answer = async (go) => {
+      $(`#archiveConfirm [data-archive="${go}"]`).click();
+      await settle();
+    };
+  inLane(3, ".lane-head").click();
+  await settle();
+  check(
+    "with a sprint selected, Archive done counts the done items in it, leaving out one with unfinished work under it (7 and task 8, not 6)",
+    archiveLabel() === "Archive 2 done in “Sprint 3”",
+  );
+  $("#archiveDone").click();
+  check(
+    "... it asks first",
+    !$("#archiveConfirm").hidden &&
+      $("#archiveConfirm").textContent.includes(
+        "Archive 2 done items in “Sprint 3”?",
+      ),
+  );
+  await answer("go");
+  check(
+    "... and archives them",
+    archived(7) && archived(8) && !archived(6) && $("#archiveConfirm").hidden,
+  );
+  await act([["UpdateRecord", "Items", 10, { Status: "Done" }]]);
+  document.body.dispatchEvent(
+    new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+  );
+  await settle();
+  check(
+    "with nothing selected, it counts every done item (6, now that task 10 is done, and 10)",
+    archiveLabel() === "Archive all 2 done",
+  );
+  $("#archiveDone").click();
+  await answer("cancel");
+  check(
+    "Cancel archives nothing",
+    !archived(6) && !archived(10) && !$("#archiveDone").hidden,
+  );
+  inLane(3, '.ocard[data-id="1"]').click();
+  await settle();
+  check(
+    "with an item selected, it counts the item and what's under it",
+    archiveLabel() ===
+      "Archive 2 done under “Sample client runs a survey in the portal”",
+  );
+  $("#archiveDone").click();
+  await answer("go");
+  check(
+    "... archives them, and then has nothing left to do",
+    archived(6) && archived(10) && $("#archiveDone").disabled,
   );
 }
 
