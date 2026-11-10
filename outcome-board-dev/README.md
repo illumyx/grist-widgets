@@ -56,7 +56,7 @@ at a card's left is its status, white (not started) to dark blue (done).
 - Assignment says who will act, so it rolls up: after its own initials, a card, note, or outcome header shows (faded)
   the initials of the others on anything shown under it. "Hide done" and "Hide shelved" decide what's shown.
 - Edit a name at the top of the side pane (Enter saves, Esc cancels). Text in backticks (`` `like_this` ``) shows
-  in monospace wherever the name is shown on the board (the edit box shows the backticks).
+  in monospace, white on black, wherever the name is shown on the board (the edit box shows the backticks).
 - Tasks: tick to mark done, click the small box to cycle urgency (normal / ! / !!), type an effort.
   A blank effort reads as 0 in Grist, so 0 means "not estimated" (e.g. the sprint progress bars then count items).
 - A red chip with ! (Elevated) or !! (High) before a name shows urgency; a capability
